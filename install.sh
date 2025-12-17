@@ -76,23 +76,54 @@ if [ ! -f ".env" ]; then
     echo "ÖNEMLİ: Spotify API Ayarları"
     echo "================================================"
     echo ""
-    echo "1. https://developer.spotify.com/dashboard adresine gidin"
-    echo "2. 'Create app' ile yeni bir uygulama oluşturun"
-    echo "3. Uygulama ayarlarından:"
-    echo "   - Client ID"
-    echo "   - Client Secret"
-    echo "   bilgilerini alın"
+    echo "Spotify API kullanabilmek için Developer Dashboard'da"
+    echo "uygulama oluşturmanız gerekiyor."
     echo ""
-    echo "4. Redirect URI olarak ekleyin:"
-    echo "   http://localhost:8888/callback"
+    echo "İki seçeneğiniz var:"
     echo ""
-    echo "5. .env dosyasını düzenleyin:"
-    echo "   nano .env"
+    echo "1) Otomatik kurulum yardımcısı (ÖNERİLEN)"
+    echo "   - Adım adım rehberlik"
+    echo "   - Tarayıcıda sayfaları otomatik açar"
     echo ""
-    read -p "Devam etmek için ENTER'a basın..."
+    echo "2) Manuel kurulum"
+    echo "   - .env dosyasını elle düzenlersiniz"
+    echo "   - README.md'deki talimatları takip edersiniz"
+    echo ""
+    read -p "Otomatik kurulum yardımcısını kullanmak ister misiniz? [e/h]: " use_helper
 
-    # Nano ile dosyayı aç
-    nano .env
+    if [[ $use_helper =~ ^[Ee]$ ]]; then
+        echo ""
+        info "Kurulum yardımcısı başlatılıyor..."
+        python setup_spotify_auth.py
+    else
+        echo ""
+        warning "Manuel kurulum seçildi"
+        echo ""
+        echo "Yapmanız gerekenler:"
+        echo ""
+        echo "1. https://developer.spotify.com/dashboard adresine gidin"
+        echo "2. 'Create app' ile yeni bir uygulama oluşturun"
+        echo "3. Uygulama ayarlarından:"
+        echo "   - Client ID"
+        echo "   - Client Secret"
+        echo "   bilgilerini alın"
+        echo ""
+        echo "4. ÇOK ÖNEMLİ: Redirect URI olarak ekleyin:"
+        echo "   http://localhost:8888/callback"
+        echo ""
+        echo "   DİKKAT:"
+        echo "   - https DEĞIL http olmalı"
+        echo "   - Tam olarak bu şekilde yazın"
+        echo "   - Dashboard'da 'Save' butonuna tıklayın!"
+        echo ""
+        echo "5. .env dosyasını düzenleyin:"
+        echo "   nano .env"
+        echo ""
+        read -p "Devam etmek için ENTER'a basın..."
+
+        # Nano ile dosyayı aç
+        nano .env
+    fi
 else
     success ".env dosyası mevcut"
 fi

@@ -55,16 +55,79 @@ Kurulum scripti şunları yapacak:
 
 ### 3. Spotify API Ayarları
 
+#### Otomatik Kurulum Yardımcısı (Önerilen)
+
+En kolay yol, interaktif kurulum yardımcısını kullanmak:
+
+```bash
+source venv/bin/activate
+python setup_spotify_auth.py
+```
+
+Bu script size adım adım rehberlik edecek ve tarayıcıda gerekli sayfaları açacaktır.
+
+#### Manuel Kurulum
+
+**Adım 1: Developer Dashboard'a Giriş**
+
 1. [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)'a gidin
-2. "Create app" ile yeni uygulama oluşturun
-3. Uygulama bilgileri:
-   - **App name**: Spotify Autoplay
-   - **App description**: Death albums autoplay
-   - **Redirect URI**: `http://localhost:8888/callback`
+2. Spotify hesabınızla giriş yapın
+3. İlk kez kullanıyorsanız, kullanım şartlarını kabul edin
 
-4. Client ID ve Client Secret'i kopyalayın
+**Adım 2: Uygulama Oluşturun**
 
-5. `.env` dosyasını düzenleyin:
+1. "Create app" butonuna tıklayın
+2. Formu doldurun:
+   ```
+   App name:         Spotify Autoplay
+   App description:  Death albums autoplay system
+   Website:          http://localhost
+   Redirect URI:     http://localhost:8888/callback
+   ```
+3. "Web API" seçeneğini işaretleyin
+4. Kullanım şartlarını kabul edin
+5. "Save" butonuna tıklayın
+
+**Adım 3: Redirect URI Ayarları (ÇOK ÖNEMLİ!)**
+
+⚠️ **Bu adım kritik! Redirect URI yanlışsa uygulama çalışmaz.**
+
+1. Oluşturduğunuz uygulamaya tıklayın
+2. "Settings" butonuna tıklayın
+3. "Redirect URIs" bölümünü bulun
+4. Şu URI'yi ekleyin (TAMAMEN aynı şekilde):
+   ```
+   http://localhost:8888/callback
+   ```
+
+   **Dikkat edilecekler:**
+   - `https` DEĞIL, `http` olmalı (localhost için HTTP kabul edilir)
+   - Sonda `/` olmamalı
+   - Büyük/küçük harf önemli
+   - Port numarası `:8888` olmalı
+
+5. "Add" butonuna tıklayın
+6. **"Save" butonuna tıklamayı unutmayın!**
+
+**Alternatif Redirect URI:**
+
+Bazı sistemlerde `localhost` yerine `127.0.0.1` kullanmak daha iyi çalışır:
+```
+http://127.0.0.1:8888/callback
+```
+
+İsterseniz her iki URI'yi de ekleyebilirsiniz. Hangisini kullanırsanız, `.env` dosyasında aynısını belirtmelisiniz.
+
+**Adım 4: Client ID ve Secret**
+
+1. "Settings" sayfasında "Basic Information" bölümünü bulun
+2. **Client ID**'yi kopyalayın (görünür durumda)
+3. **Client Secret**'i almak için:
+   - "View client secret" linkine tıklayın
+   - Görünen Secret'i kopyalayın
+   - ⚠️ **Secret'i kimseyle paylaşmayın!**
+
+**Adım 5: .env Dosyasını Düzenleyin**
 
 ```bash
 nano .env
@@ -73,13 +136,22 @@ nano .env
 Şu bilgileri girin:
 
 ```env
+# Spotify API bilgileri (ZORUNLU)
 SPOTIFY_CLIENT_ID=your_client_id_here
 SPOTIFY_CLIENT_SECRET=your_client_secret_here
+
+# Redirect URI - Dashboard'da eklediğiniz ile AYNI olmalı!
 SPOTIFY_REDIRECT_URI=http://localhost:8888/callback
 
+# Veya 127.0.0.1 kullanıyorsanız:
+# SPOTIFY_REDIRECT_URI=http://127.0.0.1:8888/callback
+
+# Zamanlama ayarları
 IDLE_TIME_MINUTES=30
 CHECK_INTERVAL_SECONDS=60
 ```
+
+**Kaydet ve çık** (nano'da: `Ctrl+X`, `Y`, `Enter`)
 
 ### 4. İlk Çalıştırma
 
@@ -227,18 +299,78 @@ sudo systemctl restart spotify-autoplay@$USER.service
 2. Bir şarkı çalmaya başlayın
 3. Scripti tekrar çalıştırın
 
-### "Could not authenticate" Hatası
+### "Could not authenticate" / "Invalid redirect URI" Hatası
 
-**Sorun**: Spotify API kimlik doğrulama hatası.
+**Sorun**: Spotify API kimlik doğrulama hatası veya redirect URI uyuşmazlığı.
 
-**Çözüm**:
-1. `.env` dosyasındaki Client ID ve Secret'i kontrol edin
-2. Redirect URI'nin doğru olduğundan emin olun
-3. `.cache` dosyasını silin ve yeniden giriş yapın:
+Bu en sık karşılaşılan hatadır! Redirect URI'nin tam olarak eşleşmesi gerekir.
+
+**Çözüm 1: Redirect URI Kontrolü (En Sık Çözüm)**
+
+1. `.env` dosyanızdaki URI'yi kontrol edin:
+   ```bash
+   cat .env | grep REDIRECT
+   ```
+
+2. Spotify Dashboard'da kontrol edin:
+   - https://developer.spotify.com/dashboard
+   - Uygulamanızı açın
+   - Settings > Redirect URIs
+   - `.env` dosyasındaki ile TAM OLARAK aynı olmalı!
+
+3. Sık yapılan hatalar:
+   - ❌ `http://localhost:8888/callback/` (sonda `/` var)
+   - ❌ `https://localhost:8888/callback` (`https` kullanılmış)
+   - ❌ `http://localhost/callback` (port eksik)
+   - ✅ `http://localhost:8888/callback` (DOĞRU)
+
+4. Dashboard'da değişiklik yaptıysanız **"Save" butonuna tıklamayı unutmayın!**
+
+**Çözüm 2: Alternatif URI Deneyin**
+
+Bazı sistemlerde `localhost` yerine `127.0.0.1` daha iyi çalışır:
+
+1. Spotify Dashboard'a ekleyin:
+   ```
+   http://127.0.0.1:8888/callback
+   ```
+
+2. `.env` dosyasını güncelleyin:
+   ```env
+   SPOTIFY_REDIRECT_URI=http://127.0.0.1:8888/callback
+   ```
+
+3. `.cache` dosyasını silin ve tekrar deneyin:
    ```bash
    rm .cache*
+   source venv/bin/activate
    python spotify_autoplay.py
    ```
+
+**Çözüm 3: Client ID/Secret Kontrolü**
+
+1. `.env` dosyasındaki Client ID ve Secret'i kontrol edin:
+   ```bash
+   cat .env
+   ```
+
+2. Boşluk, satır sonu, veya fazladan karakter olmamalı
+
+3. Dashboard'dan tekrar kopyalayın
+
+**Çözüm 4: Tamamen Yeni Başlangıç**
+
+```bash
+# Cache'i temizle
+rm -f .cache*
+
+# Kurulum yardımcısını çalıştır
+source venv/bin/activate
+python setup_spotify_auth.py
+
+# Test et
+python test_spotify.py
+```
 
 ### Sanal Ses Kartı Çalışmıyor
 

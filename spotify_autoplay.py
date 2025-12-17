@@ -27,12 +27,49 @@ class SpotifyAutoPlayer:
         """Spotify otomatik çalma sınıfını başlat"""
         Config.validate()
 
-        self.sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
-            client_id=Config.SPOTIFY_CLIENT_ID,
-            client_secret=Config.SPOTIFY_CLIENT_SECRET,
-            redirect_uri=Config.SPOTIFY_REDIRECT_URI,
-            scope=Config.SPOTIFY_SCOPE
-        ))
+        try:
+            # Spotify OAuth kurulumu
+            logger.info("Spotify kimlik doğrulama başlatılıyor...")
+
+            auth_manager = SpotifyOAuth(
+                client_id=Config.SPOTIFY_CLIENT_ID,
+                client_secret=Config.SPOTIFY_CLIENT_SECRET,
+                redirect_uri=Config.SPOTIFY_REDIRECT_URI,
+                scope=Config.SPOTIFY_SCOPE,
+                open_browser=True,  # Tarayıcıyı otomatik aç
+                cache_path='.cache'  # Token cache dosyası
+            )
+
+            self.sp = spotipy.Spotify(auth_manager=auth_manager)
+
+            # Test connection
+            user = self.sp.current_user()
+            logger.info(f"✓ Spotify'a bağlandı: {user['display_name']} ({user['id']})")
+
+            if user['product'] != 'premium':
+                logger.warning("⚠️  UYARI: Spotify Premium hesap gereklidir!")
+                logger.warning("   Playback kontrolü Premium hesaplarda çalışır.")
+
+        except Exception as e:
+            logger.error(f"❌ Spotify kimlik doğrulama hatası: {e}")
+            logger.error("\n" + "="*60)
+            logger.error("Olası çözümler:")
+            logger.error("1. Redirect URI'yi kontrol edin:")
+            logger.error(f"   .env dosyası: {Config.SPOTIFY_REDIRECT_URI}")
+            logger.error("   Spotify Dashboard'da AYNI URI ekli olmalı!")
+            logger.error("")
+            logger.error("2. Tarayıcıda yetkilendirme yapın:")
+            logger.error("   - Spotify login sayfası açılacak")
+            logger.error("   - Giriş yapın ve 'Agree' tıklayın")
+            logger.error("   - Yönlendirme URL'ini kopyalayın")
+            logger.error("   - Terminale yapıştırın")
+            logger.error("")
+            logger.error("3. .cache dosyasını silin ve tekrar deneyin:")
+            logger.error("   rm .cache*")
+            logger.error("")
+            logger.error("4. Client ID ve Secret'i kontrol edin (.env dosyası)")
+            logger.error("="*60 + "\n")
+            raise
 
         self.last_activity_time = datetime.now()
         self.last_track_id = None
