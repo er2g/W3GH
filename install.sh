@@ -76,53 +76,65 @@ if [ ! -f ".env" ]; then
     echo "ÖNEMLİ: Spotify API Ayarları"
     echo "================================================"
     echo ""
-    echo "Spotify API kullanabilmek için Developer Dashboard'da"
-    echo "uygulama oluşturmanız gerekiyor."
+    echo "⚠️  Spotify artık HTTPS zorunlu tutuyor!"
+    echo "   HTTP redirect URI'leri kabul etmiyor."
     echo ""
-    echo "İki seçeneğiniz var:"
+    echo "En kolay çözüm: Manuel Copy-Paste yöntemi"
     echo ""
-    echo "1) Otomatik kurulum yardımcısı (ÖNERİLEN)"
-    echo "   - Adım adım rehberlik"
-    echo "   - Tarayıcıda sayfaları otomatik açar"
+    echo "Yapmanız gerekenler:"
     echo ""
-    echo "2) Manuel kurulum"
-    echo "   - .env dosyasını elle düzenlersiniz"
-    echo "   - README.md'deki talimatları takip edersiniz"
+    echo "1. https://developer.spotify.com/dashboard adresine gidin"
+    echo "2. 'Create app' ile yeni bir uygulama oluşturun"
+    echo "   - App name: Spotify Autoplay"
+    echo "   - Website: http://localhost"
+    echo "   - Redirect URI: BOŞ BIRAKABİLİRSİNİZ"
     echo ""
-    read -p "Otomatik kurulum yardımcısını kullanmak ister misiniz? [e/h]: " use_helper
+    echo "3. Client ID ve Client Secret'i kopyalayın"
+    echo ""
+    echo "4. .env dosyasını düzenleyin:"
+    echo ""
 
-    if [[ $use_helper =~ ^[Ee]$ ]]; then
-        echo ""
-        info "Kurulum yardımcısı başlatılıyor..."
-        python setup_spotify_auth.py
-    else
-        echo ""
-        warning "Manuel kurulum seçildi"
-        echo ""
-        echo "Yapmanız gerekenler:"
-        echo ""
-        echo "1. https://developer.spotify.com/dashboard adresine gidin"
-        echo "2. 'Create app' ile yeni bir uygulama oluşturun"
-        echo "3. Uygulama ayarlarından:"
-        echo "   - Client ID"
-        echo "   - Client Secret"
-        echo "   bilgilerini alın"
-        echo ""
-        echo "4. ÇOK ÖNEMLİ: Redirect URI olarak ekleyin:"
-        echo "   http://localhost:8888/callback"
-        echo ""
-        echo "   DİKKAT:"
-        echo "   - https DEĞIL http olmalı"
-        echo "   - Tam olarak bu şekilde yazın"
-        echo "   - Dashboard'da 'Save' butonuna tıklayın!"
-        echo ""
-        echo "5. .env dosyasını düzenleyin:"
-        echo "   nano .env"
-        echo ""
-        read -p "Devam etmek için ENTER'a basın..."
+    read -p "Şimdi .env dosyasını düzenlemek ister misiniz? [e/h]: " edit_env
 
+    if [[ $edit_env =~ ^[Ee]$ ]]; then
         # Nano ile dosyayı aç
         nano .env
+
+        echo ""
+        echo "================================================"
+        echo "ÖNEMLİ: İlk Authentication"
+        echo "================================================"
+        echo ""
+        echo "Şimdi Spotify ile ilk authentication yapmalısınız."
+        echo ""
+        echo "Manuel copy-paste yöntemi kullanacağız:"
+        echo "1. python auth_manual.py çalıştırılacak"
+        echo "2. Tarayıcıda Spotify login açılacak"
+        echo "3. Giriş yapıp 'Agree' tıklayacaksınız"
+        echo "4. Hata sayfası açılacak (NORMAL!)"
+        echo "5. Adres çubuğundaki URL'i kopyalayacaksınız"
+        echo "6. Terminale yapıştıracaksınız"
+        echo ""
+
+        read -p "Şimdi authentication yapmak ister misiniz? [e/h]: " do_auth
+
+        if [[ $do_auth =~ ^[Ee]$ ]]; then
+            python auth_manual.py
+        else
+            echo ""
+            warning "Authentication atlandı"
+            echo "Daha sonra çalıştırın: python auth_manual.py"
+        fi
+    else
+        echo ""
+        warning ".env düzenleme atlandı"
+        echo ""
+        echo "Daha sonra düzenleyin:"
+        echo "  nano .env"
+        echo ""
+        echo "Sonra authentication yapın:"
+        echo "  source venv/bin/activate"
+        echo "  python auth_manual.py"
     fi
 else
     success ".env dosyası mevcut"
