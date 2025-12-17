@@ -3,9 +3,15 @@
 Spotify bağlantı test scripti
 """
 import sys
-from config import Config
-import spotipy
-from spotipy.oauth2 import SpotifyOAuth
+try:
+    from config import Config
+    import spotipy
+    from spotipy.oauth2 import SpotifyOAuth
+except ImportError as e:
+    print(f"❌ Import hatası: {e}")
+    print("\nKurmak için: pip3 install spotipy python-dotenv")
+    sys.exit(1)
+
 
 def test_connection():
     """Spotify API bağlantısını test et"""
@@ -53,7 +59,6 @@ def test_connection():
         if user['product'] != 'premium':
             print()
             print("⚠️  UYARI: Spotify Premium hesap gereklidir!")
-            print("   Playback kontrolü Premium hesaplarda çalışır.")
     except Exception as e:
         print(f"✗ Kullanıcı bilgisi alınamadı: {e}")
         return False
@@ -89,9 +94,7 @@ def test_connection():
         if death_artist:
             print(f"✓ Death grubu bulundu")
             print(f"  Spotify ID: {death_artist['id']}")
-            print(f"  Popülerlik: {death_artist['popularity']}/100")
 
-            # Albümleri listele
             albums = sp.artist_albums(death_artist['id'], album_type='album', limit=10)
             print(f"  Albümler ({len(albums['items'])}):")
             for album in albums['items'][:5]:
@@ -109,11 +112,7 @@ def test_connection():
     print("=" * 50)
     print()
     print("Sistemi başlatmak için:")
-    print("  ./start.sh")
-    print()
-    print("veya")
-    print()
-    print("  sudo systemctl start spotify-autoplay@$USER.service")
+    print("  python3 spotify_autoplay.py")
     print()
 
     return True

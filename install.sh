@@ -1,11 +1,11 @@
 #!/bin/bash
-# Spotify Autoplay Kurulum Scripti
+# Spotify Autoplay Kurulum Scripti - Basitleştirilmiş
 
 set -e
 
 echo "================================================"
 echo "Spotify Autoplay - Death Albums Loop"
-echo "Kurulum Scripti"
+echo "Basit Kurulum"
 echo "================================================"
 echo ""
 
@@ -15,7 +15,6 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Hata fonksiyonu
 error() {
     echo -e "${RED}[HATA]${NC} $1"
     exit 1
@@ -36,12 +35,12 @@ info() {
 # Python3 kontrolü
 info "Python3 kontrolü yapılıyor..."
 if ! command -v python3 &> /dev/null; then
-    error "Python3 bulunamadı. Lütfen Python3'ü kurun: sudo apt-get install python3"
+    error "Python3 bulunamadı. Kurun: sudo apt-get install python3"
 fi
 success "Python3 bulundu: $(python3 --version)"
 
 # Pip kontrolü
-info "pip kontrolü yapılıyor..."
+info "pip3 kontrolü yapılıyor..."
 if ! command -v pip3 &> /dev/null; then
     warning "pip3 bulunamadı, kuruluyor..."
     sudo apt-get update
@@ -49,107 +48,24 @@ if ! command -v pip3 &> /dev/null; then
 fi
 success "pip3 bulundu"
 
-# Virtual environment kurulumu
-info "Python virtual environment oluşturuluyor..."
-if [ ! -d "venv" ]; then
-    python3 -m venv venv
-    success "Virtual environment oluşturuldu"
-else
-    success "Virtual environment zaten mevcut"
-fi
-
-# Activate ve dependencies kurulumu
-info "Python bağımlılıkları yükleniyor..."
-source venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
+# Global bağımlılıkları kur
+info "Python bağımlılıkları yükleniyor (global)..."
+pip3 install --user -r requirements.txt
 success "Bağımlılıklar yüklendi"
 
-# .env dosyası kontrolü
-if [ ! -f ".env" ]; then
-    warning ".env dosyası bulunamadı"
-    echo ""
-    echo "Spotify API ayarları için .env dosyası oluşturuluyor..."
-    cp .env.example .env
-    echo ""
-    echo "================================================"
-    echo "ÖNEMLİ: Spotify API Ayarları"
-    echo "================================================"
-    echo ""
-    echo "⚠️  Spotify artık HTTPS zorunlu tutuyor!"
-    echo "   HTTP redirect URI'leri kabul etmiyor."
-    echo ""
-    echo "En kolay çözüm: Manuel Copy-Paste yöntemi"
-    echo ""
-    echo "Yapmanız gerekenler:"
-    echo ""
-    echo "1. https://developer.spotify.com/dashboard adresine gidin"
-    echo "2. 'Create app' ile yeni bir uygulama oluşturun"
-    echo "   - App name: Spotify Autoplay"
-    echo "   - Website: http://localhost"
-    echo "   - Redirect URI: BOŞ BIRAKABİLİRSİNİZ"
-    echo ""
-    echo "3. Client ID ve Client Secret'i kopyalayın"
-    echo ""
-    echo "4. .env dosyasını düzenleyin:"
-    echo ""
-
-    read -p "Şimdi .env dosyasını düzenlemek ister misiniz? [e/h]: " edit_env
-
-    if [[ $edit_env =~ ^[Ee]$ ]]; then
-        # Nano ile dosyayı aç
-        nano .env
-
-        echo ""
-        echo "================================================"
-        echo "ÖNEMLİ: İlk Authentication"
-        echo "================================================"
-        echo ""
-        echo "Şimdi Spotify ile ilk authentication yapmalısınız."
-        echo ""
-        echo "Manuel copy-paste yöntemi kullanacağız:"
-        echo "1. python auth_manual.py çalıştırılacak"
-        echo "2. Tarayıcıda Spotify login açılacak"
-        echo "3. Giriş yapıp 'Agree' tıklayacaksınız"
-        echo "4. Hata sayfası açılacak (NORMAL!)"
-        echo "5. Adres çubuğundaki URL'i kopyalayacaksınız"
-        echo "6. Terminale yapıştıracaksınız"
-        echo ""
-
-        read -p "Şimdi authentication yapmak ister misiniz? [e/h]: " do_auth
-
-        if [[ $do_auth =~ ^[Ee]$ ]]; then
-            python auth_manual.py
-        else
-            echo ""
-            warning "Authentication atlandı"
-            echo "Daha sonra çalıştırın: python auth_manual.py"
-        fi
-    else
-        echo ""
-        warning ".env düzenleme atlandı"
-        echo ""
-        echo "Daha sonra düzenleyin:"
-        echo "  nano .env"
-        echo ""
-        echo "Sonra authentication yapın:"
-        echo "  source venv/bin/activate"
-        echo "  python auth_manual.py"
-    fi
-else
-    success ".env dosyası mevcut"
-fi
-
-# Executable yapma
+# Script dosyalarını executable yap
 info "Script dosyaları executable yapılıyor..."
+chmod +x auth_manual.py
 chmod +x spotify_autoplay.py
 chmod +x setup_virtual_audio.sh
+chmod +x start.sh
+chmod +x stop.sh
 success "Script dosyaları hazır"
 
 # Sanal ses kartı kurulumu
 echo ""
 echo "================================================"
-echo "Sanal Ses Kartı Kurulumu"
+echo "Sanal Ses Kartı Kurulumu (Opsiyonel)"
 echo "================================================"
 echo ""
 read -p "Sanal ses kartı kurmak istiyor musunuz? (Sunucu için gerekli) [e/h]: " install_audio
@@ -164,7 +80,7 @@ fi
 # Systemd service kurulumu
 echo ""
 echo "================================================"
-echo "Systemd Service Kurulumu"
+echo "Systemd Service Kurulumu (Opsiyonel)"
 echo "================================================"
 echo ""
 read -p "Otomatik başlatma servisi kurmak istiyor musunuz? [e/h]: " install_service
@@ -172,26 +88,14 @@ read -p "Otomatik başlatma servisi kurmak istiyor musunuz? [e/h]: " install_ser
 if [[ $install_service =~ ^[Ee]$ ]]; then
     info "Systemd servisi kuruluyor..."
 
-    # Service dosyasını kopyala
     sudo cp spotify-autoplay.service /etc/systemd/system/spotify-autoplay@.service
-
-    # Systemd'yi yenile
     sudo systemctl daemon-reload
-
-    # Servisi aktifleştir
     sudo systemctl enable spotify-autoplay@$USER.service
 
     success "Systemd servisi kuruldu"
     echo ""
     echo "Servisi başlatmak için:"
     echo "  sudo systemctl start spotify-autoplay@$USER.service"
-    echo ""
-    echo "Servis durumunu kontrol etmek için:"
-    echo "  sudo systemctl status spotify-autoplay@$USER.service"
-    echo ""
-    echo "Log'ları görüntülemek için:"
-    echo "  tail -f spotify_autoplay.log"
-    echo "  sudo journalctl -u spotify-autoplay@$USER.service -f"
 else
     warning "Systemd servisi kurulumu atlandı"
 fi
@@ -201,18 +105,18 @@ echo "================================================"
 echo "✓ Kurulum Tamamlandı!"
 echo "================================================"
 echo ""
-echo "Manuel olarak başlatmak için:"
-echo "  source venv/bin/activate"
-echo "  python spotify_autoplay.py"
+echo "Şimdi Spotify API kurulumu yapın:"
 echo ""
-echo "İlk çalıştırmada:"
-echo "1. Tarayıcıda Spotify oturum açma sayfası açılacak"
-echo "2. Giriş yapın ve uygulamayı yetkilendirin"
-echo "3. Yönlendirilen URL'i kopyalayın ve terminale yapıştırın"
+echo "  python3 auth_manual.py"
 echo ""
-echo "Özellikler:"
-echo "- ${Config.IDLE_TIME_MINUTES} dakika boşta kalınca Death albümleri çalar"
-echo "- Loop modunda sürekli çalar"
-echo "- Kullanıcı müdahale edince (durdur/başlat/atla) otomatik mod kapanır"
-echo "- 30 dakika sonra tekrar otomatik başlar"
+echo "Script size şunları soracak:"
+echo "  1. Spotify Client ID"
+echo "  2. Spotify Client Secret"
+echo "  3. URL kopyala-yapıştır"
+echo ""
+echo "Sonra uygulamayı başlatın:"
+echo "  python3 spotify_autoplay.py"
+echo ""
+echo "veya:"
+echo "  ./start.sh"
 echo ""
