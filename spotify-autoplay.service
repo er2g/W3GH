@@ -1,0 +1,31 @@
+[Unit]
+Description=Spotify Autoplay Service - Death Albums Loop
+After=network.target sound.target pulseaudio.service
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/home/%i/W3GH
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+
+# Virtual environment'ı kullan
+ExecStart=/home/%i/W3GH/venv/bin/python /home/%i/W3GH/spotify_autoplay.py
+
+# Hata durumunda yeniden başlat
+Restart=on-failure
+RestartSec=30
+
+# Log ayarları
+StandardOutput=append:/home/%i/W3GH/service.log
+StandardError=append:/home/%i/W3GH/service_error.log
+
+# Güvenlik ayarları
+NoNewPrivileges=true
+PrivateTmp=true
+
+# PulseAudio için gerekli
+Environment="XDG_RUNTIME_DIR=/run/user/%U"
+
+[Install]
+WantedBy=multi-user.target
