@@ -5,7 +5,7 @@ Death grubunun albümlerini otomatik olarak çalar.
 """
 import time
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from config import Config
@@ -25,19 +25,25 @@ logger = logging.getLogger(__name__)
 class SpotifyAutoPlayer:
     def __init__(self):
         """Spotify otomatik çalma sınıfını başlat"""
-        Config.validate()
+        try:
+            # Credentials yükle
+            client_id = Config.get_client_id()
+            client_secret = Config.get_client_secret()
+        except Exception as e:
+            logger.error(f"❌ {e}")
+            raise
 
         try:
             # Spotify OAuth kurulumu
             logger.info("Spotify kimlik doğrulama başlatılıyor...")
 
             auth_manager = SpotifyOAuth(
-                client_id=Config.SPOTIFY_CLIENT_ID,
-                client_secret=Config.SPOTIFY_CLIENT_SECRET,
+                client_id=client_id,
+                client_secret=client_secret,
                 redirect_uri=Config.SPOTIFY_REDIRECT_URI,
                 scope=Config.SPOTIFY_SCOPE,
-                open_browser=True,  # Tarayıcıyı otomatik aç
-                cache_path='.cache'  # Token cache dosyası
+                open_browser=False,  # Manuel auth kullanıyoruz
+                cache_path='.cache'
             )
 
             self.sp = spotipy.Spotify(auth_manager=auth_manager)
@@ -52,23 +58,7 @@ class SpotifyAutoPlayer:
 
         except Exception as e:
             logger.error(f"❌ Spotify kimlik doğrulama hatası: {e}")
-            logger.error("\n" + "="*60)
-            logger.error("Olası çözümler:")
-            logger.error("1. Redirect URI'yi kontrol edin:")
-            logger.error(f"   .env dosyası: {Config.SPOTIFY_REDIRECT_URI}")
-            logger.error("   Spotify Dashboard'da AYNI URI ekli olmalı!")
-            logger.error("")
-            logger.error("2. Tarayıcıda yetkilendirme yapın:")
-            logger.error("   - Spotify login sayfası açılacak")
-            logger.error("   - Giriş yapın ve 'Agree' tıklayın")
-            logger.error("   - Yönlendirme URL'ini kopyalayın")
-            logger.error("   - Terminale yapıştırın")
-            logger.error("")
-            logger.error("3. .cache dosyasını silin ve tekrar deneyin:")
-            logger.error("   rm .cache*")
-            logger.error("")
-            logger.error("4. Client ID ve Secret'i kontrol edin (.env dosyası)")
-            logger.error("="*60 + "\n")
+            logger.error("\nÇözüm: python3 auth_manual.py çalıştırın")
             raise
 
         self.last_activity_time = datetime.now()
@@ -177,6 +167,42 @@ class SpotifyAutoPlayer:
                 return True
         return False
 
+    def _get_preferred_device(self):
+        """Yerel cihazı (sunucu) tercih et"""
+        try:
+            devices = self.sp.devices()
+            if not devices['devices']:
+                logger.error("❌ Aktif Spotify cihazı bulunamadı!")
+                logger.error("   Spotify uygulamasını açın ve bir şarkı çalın.")
+                return None
+
+            # Cihazları listele
+            logger.info(f"{len(devices['devices'])} aktif cihaz bulundu:")
+            for dev in devices['devices']:
+                logger.info(f"  - {dev['name']} ({dev['type']}) {'[AKTIF]' if dev['is_active'] else ''}")
+
+            # Öncelik sırası:
+            # 1. Aktif cihaz varsa onu kullan
+            for device in devices['devices']:
+                if device['is_active']:
+                    logger.info(f"✓ Aktif cihaz kullanılıyor: {device['name']}")
+                    return device['id']
+
+            # 2. Computer tipinde yerel cihaz (sunucu)
+            for device in devices['devices']:
+                if device['type'].lower() == 'computer':
+                    logger.info(f"✓ Yerel cihaz seçildi: {device['name']}")
+                    return device['id']
+
+            # 3. İlk cihazı kullan
+            device = devices['devices'][0]
+            logger.info(f"✓ Cihaz seçildi: {device['name']}")
+            return device['id']
+
+        except Exception as e:
+            logger.error(f"Cihaz seçimi hatası: {e}")
+            return None
+
     def start_death_playback(self):
         """Death albümlerini çalmaya başla"""
         if not self.death_albums:
@@ -184,17 +210,14 @@ class SpotifyAutoPlayer:
             return False
 
         try:
-            # İlk albümü çal
-            album_uri = self.death_albums[0]['uri']
-            logger.info(f"Death çalınıyor: {self.death_albums[0]['name']}")
-
-            # Aktif cihazı bul
-            devices = self.sp.devices()
-            if not devices['devices']:
-                logger.error("Aktif Spotify cihazı bulunamadı!")
+            # Cihaz seç
+            device_id = self._get_preferred_device()
+            if not device_id:
                 return False
 
-            device_id = devices['devices'][0]['id']
+            # İlk albümü çal
+            album_uri = self.death_albums[0]['uri']
+            logger.info(f"🎵 Death çalınıyor: {self.death_albums[0]['name']}")
 
             # Albümü çal
             self.sp.start_playback(device_id=device_id, context_uri=album_uri)
@@ -208,7 +231,7 @@ class SpotifyAutoPlayer:
             self.autoplay_mode = True
             self.last_activity_time = datetime.now()
 
-            logger.info("Otomatik çalma modu başlatıldı (Death albümleri loop'ta)")
+            logger.info("✓ Otomatik çalma modu başlatıldı (Death albümleri loop'ta)")
             return True
 
         except Exception as e:
@@ -219,6 +242,13 @@ class SpotifyAutoPlayer:
         """Ana döngü"""
         logger.info(f"İzleme başladı. Boşta kalma süresi: {Config.IDLE_TIME_MINUTES} dakika")
         logger.info(f"Kontrol aralığı: {Config.CHECK_INTERVAL_SECONDS} saniye")
+
+        # İLK AÇILIŞTA HEMEN DEATH ÇALSIN
+        logger.info("\n🎵 İlk açılış - Death otomatik başlatılıyor...")
+        if self.start_death_playback():
+            logger.info("✓ Death çalmaya başladı!")
+        else:
+            logger.warning("⚠️  Death başlatılamadı, izleme moduna geçiliyor...")
 
         while True:
             try:
@@ -240,7 +270,7 @@ class SpotifyAutoPlayer:
                     if playback and playback.get('item'):
                         track_name = playback['item']['name']
                         artist_name = playback['item']['artists'][0]['name']
-                        logger.info(f"Otomatik mod: {artist_name} - {track_name}")
+                        logger.info(f"🎵 Otomatik mod: {artist_name} - {track_name}")
 
                 # Bekle
                 time.sleep(Config.CHECK_INTERVAL_SECONDS)

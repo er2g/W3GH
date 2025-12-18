@@ -1,4 +1,7 @@
-# Environment variables
+# Credentials
+.spotify_credentials.json
+
+# Environment variables (eski)
 .env
 
 # Python
@@ -7,9 +10,6 @@ __pycache__/
 *$py.class
 *.so
 .Python
-venv/
-env/
-ENV/
 
 # Spotify cache
 .cache

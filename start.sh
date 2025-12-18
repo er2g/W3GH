@@ -3,23 +3,14 @@
 
 echo "🎵 Spotify Autoplay başlatılıyor..."
 
-# Virtual environment'ı aktifleştir
-if [ -d "venv" ]; then
-    source venv/bin/activate
-else
-    echo "❌ Virtual environment bulunamadı!"
-    echo "Önce install.sh scriptini çalıştırın."
-    exit 1
-fi
-
-# .env dosyası kontrolü
-if [ ! -f ".env" ]; then
-    echo "❌ .env dosyası bulunamadı!"
-    echo "Lütfen .env.example dosyasını kopyalayın ve düzenleyin:"
-    echo "  cp .env.example .env"
-    echo "  nano .env"
+# Credentials kontrolü
+if [ ! -f ".spotify_credentials.json" ]; then
+    echo "❌ Credentials bulunamadı!"
+    echo ""
+    echo "Önce Spotify API kurulumu yapın:"
+    echo "  python3 auth_manual.py"
     exit 1
 fi
 
 # Python scriptini çalıştır
-python spotify_autoplay.py
+python3 spotify_autoplay.py
