@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+
+{% block title %}Playlist Yönetimi - Spotify Yönetim{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <!-- Sidebar -->
+        <div class="col-md-3 col-lg-2 sidebar d-none d-md-block">
+            <nav class="nav flex-column">
+                <a class="nav-link" href="{{ url_for('dashboard') }}">
+                    <i class="bi bi-speedometer2"></i>Dashboard
+                </a>
+                <a class="nav-link" href="{{ url_for('devices_page') }}">
+                    <i class="bi bi-speaker"></i>Cihazlar
+                </a>
+                <a class="nav-link active" href="{{ url_for('playlists_page') }}">
+                    <i class="bi bi-music-note-list"></i>Playlistler
+                </a>
+                <a class="nav-link" href="{{ url_for('settings_page') }}">
+                    <i class="bi bi-gear"></i>Ayarlar
+                </a>
+                <a class="nav-link" href="{{ url_for('logs_page') }}">
+                    <i class="bi bi-journal-text"></i>Loglar
+                </a>
+            </nav>
+        </div>
+
+        <!-- Main Content -->
+        <div class="col-md-9 col-lg-10 ms-auto p-4">
+            <h3 class="mb-4"><i class="bi bi-music-note-list me-2"></i>Playlist ve Müzik Yönetimi</h3>
+
+            <!-- Seçili Kaynak -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="bi bi-play-circle me-2"></i>Otomatik Çalma Kaynağı
+                </div>
+                <div class="card-body">
+                    {% if settings.use_custom_playlist and settings.custom_playlist_name %}
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="badge bg-info me-2">Playlist</span>
+                            <strong>{{ settings.custom_playlist_name }}</strong>
+                        </div>
+                        <div>
+                            <button class="btn btn-spotify btn-sm me-2" onclick="playNow('{{ settings.custom_playlist_uri }}')">
+                                <i class="bi bi-play-fill"></i> Şimdi Çal
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm" onclick="clearPlaylist()">
+                                <i class="bi bi-x"></i> Temizle
+                            </button>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="badge badge-spotify me-2">Artist</span>
+                            <strong>{{ settings.artist_name }}</strong> albümleri
+                        </div>
+                        <small class="text-muted">Aşağıdan playlist veya albüm seçerek değiştirebilirsiniz</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Artist Arama -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="bi bi-search me-2"></i>Artist Ara
+                </div>
+                <div class="card-body">
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="artistSearch"
+                               placeholder="Artist adı girin..." value="{{ settings.artist_name }}">
+                        <button class="btn btn-spotify" onclick="searchArtist()">
+                            <i class="bi bi-search me-2"></i>Ara
+                        </button>
+                    </div>
+                    <div id="artistResults" class="row"></div>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- Playlistler -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <i class="bi bi-collection-play me-2"></i>Playlistlerim
+                        </div>
+                        <div class="card-body" style="max-height: 500px; overflow-y: auto;">
+                            {% if playlists %}
+                            <div class="list-group list-group-flush">
+                                {% for playlist in playlists %}
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div class="d-flex align-items-center">
+                                        {% if playlist.images %}
+                                        <img src="{{ playlist.images[0].url }}" alt=""
+                                             class="me-3" style="width: 48px; height: 48px; border-radius: 4px;">
+                                        {% else %}
+                                        <div class="me-3 bg-secondary d-flex align-items-center justify-content-center"
+                                             style="width: 48px; height: 48px; border-radius: 4px;">
+                                            <i class="bi bi-music-note"></i>
+                                        </div>
+                                        {% endif %}
+                                        <div>
+                                            <strong>{{ playlist.name }}</strong>
+                                            <br>
+                                            <small class="text-muted">{{ playlist.tracks.total }} şarkı</small>
+                                        </div>
+                                    </div>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-spotify"
+                                                onclick="playNow('{{ playlist.uri }}')" title="Şimdi Çal">
+                                            <i class="bi bi-play-fill"></i>
+                                        </button>
+                                        <button class="btn btn-outline-warning"
+                                                onclick="setPlaylist('{{ playlist.uri }}', '{{ playlist.name }}')"
+                                                title="Otomatik Kaynak Yap">
+                                            <i class="bi bi-pin-angle"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="text-center py-4 text-muted">
+                                <i class="bi bi-collection" style="font-size: 48px;"></i>
+                                <p class="mt-2">Playlist bulunamadı</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Artist Albümleri -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <i class="bi bi-disc me-2"></i>{{ settings.artist_name }} Albümleri
+                        </div>
+                        <div class="card-body" style="max-height: 500px; overflow-y: auto;" id="albumsList">
+                            {% if artist_albums %}
+                            <div class="list-group list-group-flush">
+                                {% for album in artist_albums %}
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div class="d-flex align-items-center">
+                                        {% if album.images %}
+                                        <img src="{{ album.images[-1].url if album.images else '' }}" alt=""
+                                             class="me-3" style="width: 48px; height: 48px; border-radius: 4px;">
+                                        {% endif %}
+                                        <div>
+                                            <strong>{{ album.name }}</strong>
+                                            <br>
+                                            <small class="text-muted">{{ album.release_date[:4] if album.release_date else '' }}</small>
+                                        </div>
+                                    </div>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-spotify"
+                                                onclick="playNow('{{ album.uri }}')" title="Şimdi Çal">
+                                            <i class="bi bi-play-fill"></i>
+                                        </button>
+                                        <button class="btn btn-outline-warning"
+                                                onclick="setPlaylist('{{ album.uri }}', '{{ album.name }}')"
+                                                title="Otomatik Kaynak Yap">
+                                            <i class="bi bi-pin-angle"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="text-center py-4 text-muted">
+                                <i class="bi bi-disc" style="font-size: 48px;"></i>
+                                <p class="mt-2">Albüm bulunamadı</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function searchArtist() {
+    const query = document.getElementById('artistSearch').value;
+    if (!query) return;
+
+    const result = await apiCall(`/api/search/artist?q=${encodeURIComponent(query)}`);
+
+    if (result.artists && result.artists.length > 0) {
+        let html = '';
+        result.artists.forEach(artist => {
+            const img = artist.images && artist.images.length > 0
+                ? `<img src="${artist.images[artist.images.length-1].url}" alt="" class="rounded-circle" style="width: 64px; height: 64px;">`
+                : `<div class="bg-secondary rounded-circle d-flex align-items-center justify-content-center" style="width: 64px; height: 64px;"><i class="bi bi-person"></i></div>`;
+
+            html += `
+                <div class="col-md-4 col-lg-3 mb-3">
+                    <div class="card text-center p-3">
+                        ${img}
+                        <h6 class="mt-2 mb-1">${artist.name}</h6>
+                        <small class="text-muted">${artist.followers?.total?.toLocaleString() || 0} takipçi</small>
+                        <button class="btn btn-sm btn-outline-spotify mt-2"
+                                onclick="loadArtistAlbums('${artist.id}', '${artist.name}')">
+                            <i class="bi bi-disc me-1"></i>Albümler
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        document.getElementById('artistResults').innerHTML = html;
+    } else {
+        document.getElementById('artistResults').innerHTML = '<div class="col-12 text-center text-muted">Artist bulunamadı</div>';
+    }
+}
+
+async function loadArtistAlbums(artistId, artistName) {
+    const result = await apiCall(`/api/artist/albums?artist_id=${artistId}`);
+
+    if (result.albums && result.albums.length > 0) {
+        let html = '<div class="list-group list-group-flush">';
+        result.albums.forEach(album => {
+            const img = album.images && album.images.length > 0
+                ? `<img src="${album.images[album.images.length-1].url}" alt="" class="me-3" style="width: 48px; height: 48px; border-radius: 4px;">`
+                : '';
+
+            html += `
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center">
+                        ${img}
+                        <div>
+                            <strong>${album.name}</strong>
+                            <br>
+                            <small class="text-muted">${album.release_date?.substring(0, 4) || ''}</small>
+                        </div>
+                    </div>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-spotify" onclick="playNow('${album.uri}')" title="Şimdi Çal">
+                            <i class="bi bi-play-fill"></i>
+                        </button>
+                        <button class="btn btn-outline-warning" onclick="setPlaylist('${album.uri}', '${album.name}')" title="Otomatik Kaynak Yap">
+                            <i class="bi bi-pin-angle"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+
+        document.getElementById('albumsList').innerHTML = html;
+        document.querySelector('.card-header i.bi-disc').parentElement.innerHTML =
+            `<i class="bi bi-disc me-2"></i>${artistName} Albümleri`;
+    }
+}
+
+async function playNow(uri) {
+    const result = await apiCall('/api/playback/play', 'POST', { context_uri: uri });
+    if (result.success) {
+        alert('Çalınıyor!');
+    } else {
+        alert('Hata: ' + (result.error || 'Bilinmeyen hata'));
+    }
+}
+
+async function setPlaylist(uri, name) {
+    const result = await apiCall('/api/playlist/set', 'POST', { uri: uri, name: name });
+    if (result.success) {
+        location.reload();
+    } else {
+        alert('Hata: ' + (result.message || 'Bilinmeyen hata'));
+    }
+}
+
+async function clearPlaylist() {
+    const result = await apiCall('/api/playlist/clear', 'POST');
+    if (result.success) {
+        location.reload();
+    }
+}
+
+// Enter tuşu ile arama
+document.getElementById('artistSearch').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        searchArtist();
+    }
+});
+</script>
+{% endblock %}

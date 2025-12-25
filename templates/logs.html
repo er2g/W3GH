@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+
+{% block title %}Loglar - Spotify Yönetim{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <!-- Sidebar -->
+        <div class="col-md-3 col-lg-2 sidebar d-none d-md-block">
+            <nav class="nav flex-column">
+                <a class="nav-link" href="{{ url_for('dashboard') }}">
+                    <i class="bi bi-speedometer2"></i>Dashboard
+                </a>
+                <a class="nav-link" href="{{ url_for('devices_page') }}">
+                    <i class="bi bi-speaker"></i>Cihazlar
+                </a>
+                <a class="nav-link" href="{{ url_for('playlists_page') }}">
+                    <i class="bi bi-music-note-list"></i>Playlistler
+                </a>
+                <a class="nav-link" href="{{ url_for('settings_page') }}">
+                    <i class="bi bi-gear"></i>Ayarlar
+                </a>
+                <a class="nav-link active" href="{{ url_for('logs_page') }}">
+                    <i class="bi bi-journal-text"></i>Loglar
+                </a>
+            </nav>
+        </div>
+
+        <!-- Main Content -->
+        <div class="col-md-9 col-lg-10 ms-auto p-4">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3><i class="bi bi-journal-text me-2"></i>Sistem Logları</h3>
+                <div>
+                    <button class="btn btn-outline-light me-2" onclick="location.reload()">
+                        <i class="bi bi-arrow-clockwise me-2"></i>Yenile
+                    </button>
+                    <button class="btn btn-outline-danger" onclick="clearLogs()">
+                        <i class="bi bi-trash me-2"></i>Temizle
+                    </button>
+                </div>
+            </div>
+
+            <!-- Sistem Durumu -->
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body d-flex align-items-center">
+                            <div class="me-3">
+                                <span class="status-indicator status-online" id="apiStatus"></span>
+                            </div>
+                            <div>
+                                <h6 class="mb-0">API Bağlantısı</h6>
+                                <small class="text-muted">Spotify API durumu</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body d-flex align-items-center">
+                            <div class="me-3">
+                                <span class="status-indicator" id="playerStatusIndicator"></span>
+                            </div>
+                            <div>
+                                <h6 class="mb-0">Player Durumu</h6>
+                                <small class="text-muted" id="playerStatusText">Kontrol ediliyor...</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body d-flex align-items-center">
+                            <div class="me-3">
+                                <span class="status-indicator" id="deviceStatusIndicator"></span>
+                            </div>
+                            <div>
+                                <h6 class="mb-0">Kilitli Cihaz</h6>
+                                <small class="text-muted" id="deviceStatusText">Kontrol ediliyor...</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Log Dosyaları -->
+            {% if logs %}
+            <div class="accordion" id="logsAccordion">
+                {% for log in logs %}
+                <div class="accordion-item bg-dark border-secondary">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button bg-dark text-white {% if not loop.first %}collapsed{% endif %}"
+                                type="button" data-bs-toggle="collapse"
+                                data-bs-target="#log{{ loop.index }}">
+                            <i class="bi bi-file-text me-2"></i>
+                            {{ log.file }}
+                            <span class="badge bg-secondary ms-2">{{ log.lines | length }} satır</span>
+                        </button>
+                    </h2>
+                    <div id="log{{ loop.index }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
+                         data-bs-parent="#logsAccordion">
+                        <div class="accordion-body p-0">
+                            <div class="log-container">
+                                {% for line in log.lines %}
+                                <div class="log-line {% if 'ERROR' in line %}text-danger{% elif 'WARNING' in line %}text-warning{% elif 'INFO' in line %}text-info{% endif %}">
+                                    {{ line }}
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-journal text-muted" style="font-size: 64px;"></i>
+                    <h5 class="mt-3 text-muted">Henüz Log Yok</h5>
+                    <p class="text-muted">Player çalıştığında loglar burada görünecek.</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Canlı Log (WebSocket olmadan basit polling) -->
+            <div class="card mt-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-activity me-2"></i>Canlı Durum</span>
+                    <small class="text-muted" id="lastUpdate">-</small>
+                </div>
+                <div class="card-body">
+                    <pre id="liveStatus" class="mb-0 text-muted" style="font-size: 12px;">Yükleniyor...</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// İlk yükleme ve periyodik güncelleme
+updateStatus();
+setInterval(updateStatus, 5000);
+
+async function updateStatus() {
+    try {
+        const status = await apiCall('/api/status');
+
+        // API durumu
+        const apiIndicator = document.getElementById('apiStatus');
+        apiIndicator.className = 'status-indicator ' + (status.authenticated ? 'status-online' : 'status-offline');
+
+        // Player durumu
+        const playerIndicator = document.getElementById('playerStatusIndicator');
+        const playerText = document.getElementById('playerStatusText');
+        playerIndicator.className = 'status-indicator ' + (status.player_running ? 'status-online' : 'status-offline');
+        playerText.textContent = status.player_running ? 'Çalışıyor' : 'Durdu';
+
+        // Cihaz durumu
+        const deviceIndicator = document.getElementById('deviceStatusIndicator');
+        const deviceText = document.getElementById('deviceStatusText');
+
+        if (status.settings?.device_lock_enabled) {
+            if (status.locked_device_online) {
+                deviceIndicator.className = 'status-indicator status-online';
+                deviceText.textContent = status.settings.locked_device_name + ' - Çevrimiçi';
+            } else {
+                deviceIndicator.className = 'status-indicator status-offline';
+                deviceText.textContent = status.settings.locked_device_name + ' - Çevrimdışı';
+            }
+        } else {
+            deviceIndicator.className = 'status-indicator bg-secondary';
+            deviceText.textContent = 'Kilit yok';
+        }
+
+        // Canlı durum
+        let liveText = '';
+        if (status.playback && status.playback.item) {
+            liveText += `🎵 Şu an çalıyor: ${status.playback.item.name}\n`;
+            liveText += `   Artist: ${status.playback.item.artists[0].name}\n`;
+            liveText += `   Albüm: ${status.playback.item.album.name}\n`;
+            liveText += `   Durum: ${status.playback.is_playing ? '▶️ Çalıyor' : '⏸️ Duraklatıldı'}\n`;
+        } else {
+            liveText += '🔇 Şu an hiçbir şey çalmıyor\n';
+        }
+
+        liveText += `\n📱 Aktif cihazlar: ${status.devices?.length || 0}\n`;
+        status.devices?.forEach(d => {
+            const icon = d.is_active ? '🔊' : '🔈';
+            liveText += `   ${icon} ${d.name} (${d.type}) - ${d.volume_percent}%\n`;
+        });
+
+        liveText += `\n⚙️ Ayarlar:\n`;
+        liveText += `   Boşta kalma: ${status.settings?.idle_time_minutes || 30} dk\n`;
+        liveText += `   Kontrol aralığı: ${status.settings?.check_interval_seconds || 60} sn\n`;
+        liveText += `   Artist: ${status.settings?.artist_name || 'Death'}\n`;
+
+        document.getElementById('liveStatus').textContent = liveText;
+        document.getElementById('lastUpdate').textContent = 'Son güncelleme: ' + new Date().toLocaleTimeString();
+
+    } catch (error) {
+        console.error('Status update error:', error);
+    }
+}
+
+function clearLogs() {
+    if (confirm('Tüm log dosyalarını silmek istediğinize emin misiniz?')) {
+        // Backend'de log silme endpoint'i eklenebilir
+        alert('Bu özellik henüz aktif değil.');
+    }
+}
+</script>
+{% endblock %}

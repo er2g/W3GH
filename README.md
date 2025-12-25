@@ -1,19 +1,24 @@
-# 🎵 Spotify Otomatik Çalma Sistemi - Death Loop
+# 🎵 Spotify Otomatik Çalma Sistemi
 
-Ubuntu/Linux için basit Spotify otomatik çalma uygulaması. 30 dakika Spotify'da aktivite yoksa otomatik olarak **Death** grubunun albümlerini loop modunda çalar.
+Ubuntu/Linux için Spotify otomatik çalma ve web yönetim uygulaması.
 
 ## 🎯 Özellikler
 
-- ✅ **Otomatik Başlatma**: 30 dakika boşta kalınca Death albümleri çalar
+### Web Yönetim Paneli
+- ✅ **Web Tabanlı Kurulum**: Spotify API'yi tarayıcıdan yapılandırın
+- ✅ **OAuth Authentication**: Güvenli web tabanlı Spotify girişi
+- ✅ **Dashboard**: Çalma durumu, cihazlar ve kontroller
+- ✅ **Cihaz Yönetimi**: Aktif cihazları görün ve yönetin
+- ✅ **Cihaz Kilitleme**: Belirli bir cihaza kilitleyin, kaybolursa sistem dursun
+- ✅ **Playlist Yönetimi**: Playlistler ve artist albümlerini seçin
+- ✅ **Ayarlar**: Tüm yapılandırmayı web'den yönetin
+- ✅ **Log İzleme**: Sistem loglarını canlı takip edin
+
+### Otomatik Çalma
+- ✅ **Otomatik Başlatma**: Belirlenen süre boşta kalınca otomatik çalma
 - ✅ **Kullanıcı Kontrolü**: Şarkı durdurma/başlatma/atlama ile otomatik mod kapanır
-- ✅ **Loop Modu**: Tüm Death albümleri sürekli döngüde çalar
-- ✅ **Sanal Sunucu Desteği**: Sanal ses kartı ile headless sunucularda çalışır
-- ✅ **Systemd Servisi**: Sistem başlangıcında otomatik başlar
-- ✅ **Basit Kurulum**: Tek komutla hazır!
-
-## 🎸 Death Grubu
-
-[Death](https://open.spotify.com/artist/1Dvfqq39HxvCJ3GvfeIFuT) - Chuck Schuldiner tarafından 1983'te kurulan death metal türünün öncülerinden efsanevi grup.
+- ✅ **Loop Modu**: Seçilen müzik sürekli döngüde çalar
+- ✅ **Özelleştirilebilir**: Herhangi bir artist veya playlist seçilebilir
 
 ## 📋 Gereksinimler
 
@@ -23,98 +28,110 @@ Ubuntu/Linux için basit Spotify otomatik çalma uygulaması. 30 dakika Spotify'
 
 ## 🚀 Hızlı Kurulum
 
-### 1. Repository'yi Klonlayın
+### 1. Bağımlılıkları Kurun
 
 ```bash
-git clone <repo_url>
-cd W3GH
+pip3 install --user -r requirements.txt
 ```
 
-### 2. Kurulum
+### 2. Web Panelini Başlatın
 
 ```bash
-./install.sh
+./start_web.sh
 ```
 
-Kurulum:
-- Python bağımlılıklarını kurar (global)
-- Sanal ses kartı sorar (opsiyonel)
-- Systemd servisi sorar (opsiyonel)
-
-### 3. Spotify API Kurulumu
+veya:
 
 ```bash
-python3 auth_manual.py
+python3 app.py
 ```
 
-Script şunları soracak:
-
-1. **Spotify Developer Dashboard:**
-   - https://developer.spotify.com/dashboard
-   - "Create app" oluşturun
-   - Client ID ve Secret kopyalayın
-   - NOT: Redirect URI GEREKLİ DEĞİL!
-
-2. **Credentials girin:**
-   - Client ID
-   - Client Secret
-
-3. **OAuth:**
-   - Tarayıcıda login
-   - "Agree" tıkla
-   - Hata sayfası (NORMAL!)
-   - URL'i kopyala: `http://example.com/callback?code=...`
-   - Terminale yapıştır
-
-✅ Bitti!
-
-### 4. Başlatın
-
-```bash
-python3 spotify_autoplay.py
-```
-
-## 🐛 Sorun Giderme
-
-### "No active device"
-```bash
-# Spotify açın, bir şarkı çalın
-```
-
-### "Could not authenticate"
-```bash
-rm -f .cache*
-python3 auth_manual.py
-```
-
-### "This redirect URI is not secure"
-**Normal!** Dummy URL, Dashboard'a eklemeyin. Script URL'deki code'u parse ediyor.
-
-## 📖 Nasıl Çalışır?
+### 3. Tarayıcıda Açın
 
 ```
-Normal kullanım → 30 dk boşta → Death çalar → Müdahale → Kapanır → Tekrar bekler
+http://localhost:5000
+```
+
+### 4. Kurulum Adımları
+
+1. **API Kurulumu**: Spotify Developer Dashboard'dan Client ID/Secret alın
+2. **Spotify Girişi**: Hesabınızla giriş yapın
+3. **Cihaz Seçin**: İsterseniz bir cihazı kilitleyin
+4. **Ayarları Yapın**: Boşta kalma süresi, playlist, ses seviyesi vb.
+5. **Player'ı Başlatın**: Dashboard'dan "Player Başlat" tıklayın
+
+## 🔒 Cihaz Kilitleme
+
+Cihaz kilitleme özelliği ile:
+- Müzik sadece seçilen cihazda çalar
+- Cihaz çevrimdışı olursa sistem otomatik durur
+- Başka cihazlarda istenmeyen çalma önlenir
+
+## 📁 Dosya Yapısı
+
+```
+W3GH/
+├── app.py                    # Web sunucusu
+├── spotify_autoplay.py       # Standalone CLI player
+├── config.py                 # Konfigürasyon
+├── auth_manual.py            # Manuel CLI auth
+├── templates/                # HTML şablonları
+│   ├── base.html
+│   ├── index.html
+│   ├── setup.html
+│   ├── dashboard.html
+│   ├── devices.html
+│   ├── playlists.html
+│   ├── settings.html
+│   └── logs.html
+├── start_web.sh              # Web panel başlatma
+├── requirements.txt          # Python bağımlılıkları
+└── README.md
 ```
 
 ## ⚙️ Ayarlar
 
-`.env` dosyası:
-```env
-IDLE_TIME_MINUTES=30
-CHECK_INTERVAL_SECONDS=60
+Web panelinden ayarlanabilir:
+
+| Ayar | Açıklama | Varsayılan |
+|------|----------|------------|
+| Boşta Kalma Süresi | Otomatik çalma başlama süresi | 30 dakika |
+| Kontrol Aralığı | Durum kontrol periyodu | 60 saniye |
+| Artist | Varsayılan artist | Death |
+| Ses Seviyesi | Otomatik çalmada ses | 50% |
+| Repeat Modu | Tekrar türü | context |
+| Shuffle | Karışık çalma | Kapalı |
+
+## 🐛 Sorun Giderme
+
+### "No active device"
+Spotify uygulamasını açın ve bir şarkı çalın.
+
+### "Could not authenticate"
+```bash
+rm -f .cache*
+# Web panelden tekrar giriş yapın
 ```
 
-## 🔧 Systemd
+### Port kullanımda
+```bash
+# Farklı port ile başlat
+python3 -c "from app import app; app.run(port=5001)"
+```
+
+## 🔧 Systemd Servisi (Opsiyonel)
+
+CLI modunda systemd servisi için:
 
 ```bash
-# Başlat
+# Servis dosyasını kopyala
+sudo cp spotify-autoplay.service /etc/systemd/system/spotify-autoplay@.service
+
+# Servisi başlat
 sudo systemctl start spotify-autoplay@$USER.service
 
-# Durdur
-./stop.sh
-
-# Log
-tail -f spotify_autoplay.log
+# Otomatik başlatma
+sudo systemctl enable spotify-autoplay@$USER.service
 ```
 
 ## 📊 Test
@@ -122,10 +139,6 @@ tail -f spotify_autoplay.log
 ```bash
 python3 test_spotify.py
 ```
-
-## 🎵 Death'e Saygılarımla
-
-> "Life is but a dream for the dead" — Chuck Schuldiner
 
 ---
 
