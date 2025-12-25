@@ -18,7 +18,7 @@
                             <li>"Create App" butonuna tıklayın</li>
                             <li>App Name ve Description girin</li>
                             <li><strong>Redirect URI</strong> olarak şunu ekleyin:<br>
-                                <code id="redirectUri">{{ request.url_root }}callback</code>
+                                <code id="redirectUri">{{ spotify_redirect_uri }}</code>
                                 <button class="btn btn-sm btn-outline-light ms-2" onclick="copyRedirectUri()">
                                     <i class="bi bi-clipboard"></i>
                                 </button>

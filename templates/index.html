@@ -1,114 +1,756 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>W3GH - Spotify AutoPlayer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
-{% block title %}Spotify Yönetim Paneli{% endblock %}
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #fff;
+        }
 
-{% block content %}
-<div class="container py-5">
-    <div class="row justify-content-center">
-        <div class="col-md-8 col-lg-6">
-            <div class="text-center mb-5">
-                <i class="bi bi-spotify text-spotify" style="font-size: 80px;"></i>
-                <h1 class="mt-3">Spotify Yönetim Paneli</h1>
-                <p class="text-muted">Tüm Spotify ayarlarınızı web üzerinden yönetin</p>
-            </div>
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
 
-            {% if not has_credentials %}
-            <!-- API Kurulumu Gerekli -->
-            <div class="card">
-                <div class="card-body text-center p-5">
-                    <i class="bi bi-key text-warning" style="font-size: 48px;"></i>
-                    <h4 class="mt-3">API Kurulumu Gerekli</h4>
-                    <p class="text-muted">Spotify Developer API bilgilerinizi girerek başlayın.</p>
-                    <a href="{{ url_for('setup') }}" class="btn btn-spotify mt-3">
-                        <i class="bi bi-gear me-2"></i>Kuruluma Başla
-                    </a>
-                </div>
-            </div>
+        header {
+            text-align: center;
+            padding: 40px 0 30px;
+        }
 
-            {% elif not is_authenticated %}
-            <!-- Giriş Gerekli -->
-            <div class="card">
-                <div class="card-body text-center p-5">
-                    <i class="bi bi-person-circle text-spotify" style="font-size: 48px;"></i>
-                    <h4 class="mt-3">Spotify'a Giriş Yapın</h4>
-                    <p class="text-muted">Hesabınızla giriş yaparak devam edin.</p>
-                    <a href="{{ url_for('login') }}" class="btn btn-spotify mt-3">
-                        <i class="bi bi-spotify me-2"></i>Spotify ile Giriş Yap
-                    </a>
-                    <div class="mt-4">
-                        <a href="{{ url_for('setup') }}" class="text-muted small">
-                            <i class="bi bi-gear me-1"></i>API ayarlarını değiştir
-                        </a>
-                    </div>
-                </div>
-            </div>
+        header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #1db954, #1ed760);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
 
-            {% else %}
-            <!-- Giriş Yapılmış -->
-            <div class="card">
-                <div class="card-body text-center p-5">
-                    {% if user_info.images %}
-                    <img src="{{ user_info.images[0].url }}" alt="" class="rounded-circle mb-3" style="width: 80px; height: 80px;">
-                    {% else %}
-                    <i class="bi bi-person-circle text-spotify" style="font-size: 64px;"></i>
-                    {% endif %}
-                    <h4>Hoş geldin, {{ user_info.display_name }}!</h4>
-                    <p class="text-muted">
-                        <span class="badge {% if user_info.product == 'premium' %}bg-success{% else %}bg-warning{% endif %}">
-                            {{ user_info.product | upper }}
-                        </span>
+        header p { color: #b3b3b3; font-size: 1rem; }
+
+        .card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .card h2 {
+            font-size: 1.2rem;
+            margin-bottom: 16px;
+            color: #1db954;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .status-badge.connected { background: rgba(29, 185, 84, 0.2); color: #1db954; }
+        .status-badge.disconnected { background: rgba(255, 85, 85, 0.2); color: #ff5555; }
+        .status-badge.playing { background: rgba(29, 185, 84, 0.2); color: #1db954; }
+        .status-badge.paused { background: rgba(255, 170, 0, 0.2); color: #ffaa00; }
+
+        .now-playing {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            margin-top: 16px;
+        }
+
+        .now-playing .track-info h3 { font-size: 1.1rem; margin-bottom: 4px; }
+        .now-playing .track-info p { color: #b3b3b3; font-size: 0.9rem; }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .search-box input, .input-field {
+            flex: 1;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 1rem;
+        }
+
+        .search-box input::placeholder, .input-field::placeholder { color: #888; }
+        .search-box input:focus, .input-field:focus { outline: 2px solid #1db954; }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary { background: #1db954; color: #000; }
+        .btn-primary:hover { background: #1ed760; transform: scale(1.02); }
+        .btn-secondary { background: rgba(255,255,255,0.1); color: #fff; }
+        .btn-secondary:hover { background: rgba(255,255,255,0.2); }
+        .btn-danger { background: rgba(255, 85, 85, 0.2); color: #ff5555; }
+        .btn-danger:hover { background: rgba(255, 85, 85, 0.3); }
+        .btn-block { width: 100%; margin-top: 10px; }
+
+        .artist-results {
+            display: grid;
+            gap: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .artist-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .artist-item:hover { background: rgba(29, 185, 84, 0.2); }
+
+        .artist-item img {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .artist-item .artist-name { font-weight: 600; }
+        .artist-item .artist-followers { color: #888; font-size: 0.85rem; }
+
+        .device-list { display: grid; gap: 10px; }
+
+        .device-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+        }
+
+        .device-item.locked {
+            border: 2px solid #1db954;
+            background: rgba(29, 185, 84, 0.1);
+        }
+
+        .device-info { display: flex; align-items: center; gap: 12px; }
+        .device-icon { font-size: 1.5rem; }
+        .device-name { font-weight: 500; }
+        .device-type { color: #888; font-size: 0.85rem; }
+
+        .settings-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .settings-row:last-child { border-bottom: none; }
+
+        .settings-label { display: flex; flex-direction: column; gap: 4px; }
+        .settings-label span { font-weight: 500; }
+        .settings-label small { color: #888; }
+
+        .toggle {
+            width: 50px;
+            height: 26px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 13px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .toggle.active { background: #1db954; }
+
+        .toggle::after {
+            content: '';
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            background: #fff;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: all 0.3s;
+        }
+
+        .toggle.active::after { left: 26px; }
+
+        input[type="range"] { width: 120px; accent-color: #1db954; }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .current-artist {
+            text-align: center;
+            padding: 20px;
+            background: rgba(29, 185, 84, 0.1);
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+
+        .current-artist h3 { font-size: 1.5rem; color: #1db954; }
+        .current-artist p { color: #888; margin-top: 4px; }
+
+        .loader {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #1db954;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .hidden { display: none !important; }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+
+        .alert-success { background: rgba(29, 185, 84, 0.2); color: #1db954; }
+        .alert-error { background: rgba(255, 85, 85, 0.2); color: #ff5555; }
+        .alert-warning { background: rgba(255, 170, 0, 0.2); color: #ffaa00; }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #b3b3b3;
+            font-size: 0.9rem;
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 1rem;
+        }
+
+        .info-box {
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .info-box h4 {
+            color: #1db954;
+            margin-bottom: 8px;
+        }
+
+        .info-box p {
+            color: #b3b3b3;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .info-box code {
+            background: rgba(255,255,255,0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+
+        .user-info .user-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        @media (max-width: 600px) {
+            header h1 { font-size: 1.8rem; }
+            .container { padding: 10px; }
+            .card { padding: 16px; }
+            .controls { flex-direction: column; }
+            .btn { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>W3GH</h1>
+            <p>Spotify AutoPlayer</p>
+        </header>
+
+        <!-- Alert Messages -->
+        <div id="alert-container"></div>
+
+        <!-- Auth Card (shown when not connected) -->
+        <div class="card" id="auth-card">
+            <h2>Spotify Baglantisi</h2>
+
+            <!-- Setup Form (when no credentials) -->
+            <div id="setup-form" class="hidden">
+                <div class="info-box">
+                    <h4>Kurulum</h4>
+                    <p>
+                        1. <a href="https://developer.spotify.com/dashboard" target="_blank" style="color:#1db954">Spotify Developer Dashboard</a>'a git<br>
+                        2. "Create app" ile yeni uygulama olustur<br>
+                        3. Redirect URI olarak ekle: <code id="redirect-uri">...</code><br>
+                        4. Client ID ve Secret'i asagiya yapistir
                     </p>
+                </div>
 
-                    <div class="d-grid gap-2 mt-4">
-                        <a href="{{ url_for('dashboard') }}" class="btn btn-spotify btn-lg">
-                            <i class="bi bi-speedometer2 me-2"></i>Panele Git
-                        </a>
-                    </div>
+                <div class="form-group">
+                    <label>Client ID</label>
+                    <input type="text" class="input-field" id="client-id" placeholder="1db3ad431b39468d...">
+                </div>
 
-                    <div class="row mt-5 text-center">
-                        <div class="col-4">
-                            <a href="{{ url_for('devices_page') }}" class="text-decoration-none">
-                                <i class="bi bi-speaker text-spotify" style="font-size: 32px;"></i>
-                                <p class="small mt-2 text-white">Cihazlar</p>
-                            </a>
-                        </div>
-                        <div class="col-4">
-                            <a href="{{ url_for('playlists_page') }}" class="text-decoration-none">
-                                <i class="bi bi-music-note-list text-spotify" style="font-size: 32px;"></i>
-                                <p class="small mt-2 text-white">Playlistler</p>
-                            </a>
-                        </div>
-                        <div class="col-4">
-                            <a href="{{ url_for('settings_page') }}" class="text-decoration-none">
-                                <i class="bi bi-gear text-spotify" style="font-size: 32px;"></i>
-                                <p class="small mt-2 text-white">Ayarlar</p>
-                            </a>
-                        </div>
+                <div class="form-group">
+                    <label>Client Secret</label>
+                    <input type="password" class="input-field" id="client-secret" placeholder="4418669ef2864a65...">
+                </div>
+
+                <button class="btn btn-primary btn-block" onclick="saveCredentials()">Kaydet ve Devam Et</button>
+            </div>
+
+            <!-- Login Button (when credentials exist but no token) -->
+            <div id="login-prompt" class="hidden">
+                <div class="info-box">
+                    <h4>Giris Yap</h4>
+                    <p>Spotify hesabinla giris yap ve uygulamaya izin ver.</p>
+                </div>
+                <a href="/spo/auth/login" class="btn btn-primary btn-block" style="display:block; text-align:center; text-decoration:none;">
+                    Spotify ile Giris Yap
+                </a>
+            </div>
+
+            <!-- Connected State -->
+            <div id="connected-info" class="hidden">
+                <div class="user-info">
+                    <div>
+                        <span class="status-badge connected">Bagli</span>
+                        <span class="user-name" id="user-name" style="margin-left: 10px;">-</span>
                     </div>
+                    <button class="btn btn-danger" onclick="logout()" style="padding: 8px 16px;">Cikis</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content (shown when connected) -->
+        <div id="main-content" class="hidden">
+            <!-- Status Card -->
+            <div class="card">
+                <h2>Durum</h2>
+                <div id="status-container">
+                    <span class="status-badge" id="playback-status"></span>
+                </div>
+                <div class="now-playing hidden" id="now-playing">
+                    <div class="track-info">
+                        <h3 id="track-name">-</h3>
+                        <p id="artist-name">-</p>
+                        <p id="device-name" style="font-size: 0.8rem; color: #666;">-</p>
+                    </div>
+                </div>
+                <div class="controls">
+                    <button class="btn btn-primary" onclick="startPlayback()">Basla</button>
+                    <button class="btn btn-danger" onclick="stopPlayback()">Durdur</button>
                 </div>
             </div>
 
-            <!-- Player Durumu -->
-            <div class="card mt-4">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="mb-1">Otomatik Player</h6>
-                            <small class="text-muted">{{ 'Çalışıyor' if player_running else 'Durdu' }}</small>
-                        </div>
-                        <div>
-                            <span class="status-indicator {% if player_running %}status-online{% else %}status-offline{% endif %}"></span>
-                            {% if player_running %}
-                            <span class="text-success">Aktif</span>
-                            {% else %}
-                            <span class="text-danger">Pasif</span>
-                            {% endif %}
-                        </div>
-                    </div>
+            <!-- Artist Selection -->
+            <div class="card">
+                <h2>Sanatci Sec</h2>
+                <div class="current-artist">
+                    <p>Hedef Sanatci:</p>
+                    <h3 id="target-artist">Death</h3>
+                </div>
+                <div class="search-box">
+                    <input type="text" id="artist-search" placeholder="Sanatci ara..." onkeyup="if(event.key==='Enter')doSearch()">
+                    <button class="btn btn-primary" onclick="doSearch()">Ara</button>
+                </div>
+                <div class="artist-results" id="artist-results"></div>
+            </div>
+
+            <!-- Device Selection -->
+            <div class="card">
+                <h2>Cihaz Kilitle</h2>
+                <p style="color: #888; margin-bottom: 16px; font-size: 0.9rem;">
+                    Bir cihazi kilitle - sadece o cihazda calar
+                </p>
+                <div class="device-list" id="device-list">
+                    <p style="color: #666;">Cihazlar yukleniyor...</p>
                 </div>
             </div>
-            {% endif %}
+
+            <!-- Settings -->
+            <div class="card">
+                <h2>Ayarlar</h2>
+                <div class="settings-row">
+                    <div class="settings-label">
+                        <span>Otomatik Oynatma</span>
+                        <small>Bosla kalinca otomatik baslar</small>
+                    </div>
+                    <div class="toggle" id="toggle-autoplay" onclick="toggleAutoplay()"></div>
+                </div>
+                <div class="settings-row">
+                    <div class="settings-label">
+                        <span>Bekleme Suresi</span>
+                        <small id="idle-time-label">30 dakika</small>
+                    </div>
+                    <input type="range" id="idle-time" min="1" max="120" value="30" onchange="updateIdleTime()">
+                </div>
+            </div>
         </div>
     </div>
-</div>
-{% endblock %}
+
+    <script>
+        const API_BASE = '/spo';
+        let currentStatus = {};
+        let authStatus = {};
+
+        // Check for URL params (success/error messages)
+        window.onload = function() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('success')) {
+                showAlert('Spotify baglantisi basarili!', 'success');
+                window.history.replaceState({}, '', '/spo/');
+            }
+            if (params.get('error')) {
+                showAlert('Hata: ' + params.get('error'), 'error');
+                window.history.replaceState({}, '', '/spo/');
+            }
+            checkAuthStatus();
+        };
+
+        function showAlert(message, type) {
+            const container = document.getElementById('alert-container');
+            container.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            setTimeout(() => container.innerHTML = '', 5000);
+        }
+
+        async function checkAuthStatus() {
+            try {
+                const res = await fetch(API_BASE + '/auth/status');
+                authStatus = await res.json();
+
+                document.getElementById('redirect-uri').textContent = authStatus.redirect_uri;
+
+                if (!authStatus.has_credentials) {
+                    // Show setup form
+                    document.getElementById('setup-form').classList.remove('hidden');
+                    document.getElementById('login-prompt').classList.add('hidden');
+                    document.getElementById('connected-info').classList.add('hidden');
+                    document.getElementById('main-content').classList.add('hidden');
+                } else if (!authStatus.token_valid) {
+                    // Show login button
+                    document.getElementById('setup-form').classList.add('hidden');
+                    document.getElementById('login-prompt').classList.remove('hidden');
+                    document.getElementById('connected-info').classList.add('hidden');
+                    document.getElementById('main-content').classList.add('hidden');
+                } else {
+                    // Connected - show main content
+                    document.getElementById('setup-form').classList.add('hidden');
+                    document.getElementById('login-prompt').classList.add('hidden');
+                    document.getElementById('connected-info').classList.remove('hidden');
+                    document.getElementById('main-content').classList.remove('hidden');
+                    fetchStatus();
+                }
+            } catch (e) {
+                console.error('Auth check error:', e);
+                showAlert('Baglanti hatasi', 'error');
+            }
+        }
+
+        async function saveCredentials() {
+            const clientId = document.getElementById('client-id').value.trim();
+            const clientSecret = document.getElementById('client-secret').value.trim();
+
+            if (!clientId || !clientSecret) {
+                showAlert('Client ID ve Secret gerekli!', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch(API_BASE + '/auth/setup', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({client_id: clientId, client_secret: clientSecret})
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    showAlert('Kaydedildi! Simdi giris yap.', 'success');
+                    checkAuthStatus();
+                } else {
+                    showAlert(data.error || 'Kayit hatasi', 'error');
+                }
+            } catch (e) {
+                showAlert('Baglanti hatasi', 'error');
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch(API_BASE + '/auth/logout', {method: 'POST'});
+                showAlert('Cikis yapildi', 'success');
+                checkAuthStatus();
+            } catch (e) {
+                showAlert('Cikis hatasi', 'error');
+            }
+        }
+
+        async function fetchStatus() {
+            try {
+                const res = await fetch(API_BASE + '/api/status');
+                currentStatus = await res.json();
+                updateUI();
+            } catch (e) {
+                console.error('Status error:', e);
+            }
+        }
+
+        function updateUI() {
+            const playStatus = document.getElementById('playback-status');
+            const nowPlaying = document.getElementById('now-playing');
+            const targetArtist = document.getElementById('target-artist');
+            const toggleAutoplay = document.getElementById('toggle-autoplay');
+            const idleTime = document.getElementById('idle-time');
+            const idleLabel = document.getElementById('idle-time-label');
+
+            if (currentStatus.connected) {
+                document.getElementById('user-name').textContent = currentStatus.user;
+
+                if (currentStatus.playback) {
+                    nowPlaying.classList.remove('hidden');
+                    document.getElementById('track-name').textContent = currentStatus.playback.track;
+                    document.getElementById('artist-name').textContent = currentStatus.playback.artist;
+                    document.getElementById('device-name').textContent = currentStatus.playback.device;
+
+                    playStatus.textContent = currentStatus.playback.is_playing ? 'Caliniyor' : 'Duraklatildi';
+                    playStatus.className = 'status-badge ' + (currentStatus.playback.is_playing ? 'playing' : 'paused');
+                } else {
+                    nowPlaying.classList.add('hidden');
+                    playStatus.textContent = 'Kaydedildi';
+                    playStatus.className = 'status-badge connected';
+                }
+
+                targetArtist.textContent = currentStatus.target_artist || 'Death';
+
+                if (currentStatus.autoplay_enabled) {
+                    toggleAutoplay.classList.add('active');
+                } else {
+                    toggleAutoplay.classList.remove('active');
+                }
+
+                idleTime.value = currentStatus.idle_minutes || 30;
+                idleLabel.textContent = (currentStatus.idle_minutes || 30) + ' dakika';
+
+                updateDeviceList(currentStatus.devices, currentStatus.locked_device_id);
+            }
+        }
+
+        function updateDeviceList(devices, lockedId) {
+            const container = document.getElementById('device-list');
+            if (!devices || devices.length === 0) {
+                container.innerHTML = '<p style="color: #666;">Aktif cihaz bulunamadi. Spotify uygulamasini ac!</p>';
+                return;
+            }
+
+            container.innerHTML = devices.map(d => `
+                <div class="device-item ${d.id === lockedId ? 'locked' : ''}" onclick="lockDevice('${d.id}', ${d.id === lockedId})">
+                    <div class="device-info">
+                        <span class="device-icon">${getDeviceIcon(d.type)}</span>
+                        <div>
+                            <div class="device-name">${d.name}</div>
+                            <div class="device-type">${d.type}${d.is_active ? ' - Aktif' : ''}</div>
+                        </div>
+                    </div>
+                    <button class="btn ${d.id === lockedId ? 'btn-danger' : 'btn-secondary'}" style="padding: 8px 16px; font-size: 0.85rem;">
+                        ${d.id === lockedId ? 'Kilidi Ac' : 'Kilitle'}
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function getDeviceIcon(type) {
+            const icons = {'Computer': '💻', 'Smartphone': '📱', 'Speaker': '🔊', 'TV': '📺'};
+            return icons[type] || '🎵';
+        }
+
+        async function doSearch() {
+            const query = document.getElementById('artist-search').value;
+            if (!query) return;
+
+            const container = document.getElementById('artist-results');
+            container.innerHTML = '<div class="loader"></div>';
+
+            try {
+                const res = await fetch(API_BASE + '/api/search', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({query})
+                });
+                const data = await res.json();
+
+                if (data.artists.length === 0) {
+                    container.innerHTML = '<p style="color: #666;">Sonuc bulunamadi</p>';
+                    return;
+                }
+
+                container.innerHTML = data.artists.map(a => `
+                    <div class="artist-item" onclick="selectArtist('${a.name.replace(/'/g, "\\'")}')">
+                        <img src="${a.image || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22/></svg>'}" alt="${a.name}">
+                        <div>
+                            <div class="artist-name">${a.name}</div>
+                            <div class="artist-followers">${formatNumber(a.followers)} takipci</div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                container.innerHTML = '<p style="color: #ff5555;">Arama hatasi</p>';
+            }
+        }
+
+        function formatNumber(n) {
+            if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
+            if (n >= 1000) return (n/1000).toFixed(1) + 'K';
+            return n;
+        }
+
+        async function selectArtist(name) {
+            try {
+                await fetch(API_BASE + '/api/set-artist', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({artist: name})
+                });
+                document.getElementById('target-artist').textContent = name;
+                document.getElementById('artist-results').innerHTML = '';
+                document.getElementById('artist-search').value = '';
+                showAlert(name + ' secildi!', 'success');
+            } catch (e) {
+                showAlert('Hata', 'error');
+            }
+        }
+
+        async function lockDevice(id, isLocked) {
+            try {
+                await fetch(API_BASE + '/api/lock-device', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({device_id: isLocked ? null : id})
+                });
+                fetchStatus();
+            } catch (e) {
+                showAlert('Cihaz kilitleme hatasi', 'error');
+            }
+        }
+
+        async function startPlayback() {
+            try {
+                const res = await fetch(API_BASE + '/api/play', {method: 'POST'});
+                const data = await res.json();
+                if (data.success) {
+                    showAlert('Calma basladi!', 'success');
+                } else {
+                    showAlert('Baslatma hatasi - cihaz aktif mi?', 'error');
+                }
+                fetchStatus();
+            } catch (e) {
+                showAlert('Hata', 'error');
+            }
+        }
+
+        async function stopPlayback() {
+            try {
+                await fetch(API_BASE + '/api/stop', {method: 'POST'});
+                fetchStatus();
+            } catch (e) {
+                showAlert('Durdurma hatasi', 'error');
+            }
+        }
+
+        async function toggleAutoplay() {
+            const toggle = document.getElementById('toggle-autoplay');
+            const enabled = !toggle.classList.contains('active');
+
+            try {
+                await fetch(API_BASE + '/api/settings', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({autoplay_enabled: enabled})
+                });
+                toggle.classList.toggle('active');
+            } catch (e) {
+                showAlert('Ayar hatasi', 'error');
+            }
+        }
+
+        async function updateIdleTime() {
+            const value = document.getElementById('idle-time').value;
+            document.getElementById('idle-time-label').textContent = value + ' dakika';
+
+            try {
+                await fetch(API_BASE + '/api/settings', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({idle_minutes: parseInt(value)})
+                });
+            } catch (e) {
+                showAlert('Ayar hatasi', 'error');
+            }
+        }
+
+        // Periodic refresh when connected
+        setInterval(() => {
+            if (authStatus.token_valid) fetchStatus();
+        }, 5000);
+    </script>
+</body>
+</html>

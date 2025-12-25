@@ -1,296 +1,85 @@
 #!/usr/bin/env python3
 """
-Spotify Otomatik Çalma Sistemi
-Death grubunun albümlerini otomatik olarak çalar.
+W3GH - Spotify AutoPlayer Background Service
+
+This runs continuously and monitors Spotify playback.
+When playback stops for X minutes, it starts playing the target artist
+on the locked device.
 """
 import time
 import logging
-from datetime import datetime
-import spotipy
-from spotipy.oauth2 import SpotifyOAuth
+import sys
+import os
+
+# Add current directory to path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from spotify_service import spotify_service
 from config import Config
 
-# Logging ayarları
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('spotify_autoplay.log'),
+        logging.FileHandler(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'autoplay.log')),
         logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
 
 
-class SpotifyAutoPlayer:
-    def __init__(self):
-        """Spotify otomatik çalma sınıfını başlat"""
-        try:
-            # Credentials yükle
-            client_id = Config.get_client_id()
-            client_secret = Config.get_client_secret()
-        except Exception as e:
-            logger.error(f"❌ {e}")
-            raise
-
-        try:
-            # Spotify OAuth kurulumu
-            logger.info("Spotify kimlik doğrulama başlatılıyor...")
-
-            auth_manager = SpotifyOAuth(
-                client_id=client_id,
-                client_secret=client_secret,
-                redirect_uri=Config.SPOTIFY_REDIRECT_URI,
-                scope=Config.SPOTIFY_SCOPE,
-                open_browser=False,  # Manuel auth kullanıyoruz
-                cache_path='.cache'
-            )
-
-            self.sp = spotipy.Spotify(auth_manager=auth_manager)
-
-            # Test connection
-            user = self.sp.current_user()
-            logger.info(f"✓ Spotify'a bağlandı: {user['display_name']} ({user['id']})")
-
-            if user['product'] != 'premium':
-                logger.warning("⚠️  UYARI: Spotify Premium hesap gereklidir!")
-                logger.warning("   Playback kontrolü Premium hesaplarda çalışır.")
-
-        except Exception as e:
-            logger.error(f"❌ Spotify kimlik doğrulama hatası: {e}")
-            logger.error("\nÇözüm: python3 auth_manual.py çalıştırın")
-            raise
-
-        self.last_activity_time = datetime.now()
-        self.last_track_id = None
-        self.last_is_playing = False
-        self.autoplay_mode = False
-        self.death_albums = []
-
-        logger.info("Spotify AutoPlayer başlatıldı")
-        self._find_death_albums()
-
-    def _find_death_albums(self):
-        """Death grubunun tüm albümlerini bul"""
-        try:
-            # Death grubunu ara
-            results = self.sp.search(q='artist:Death metal', type='artist', limit=10)
-            death_artist = None
-
-            for artist in results['artists']['items']:
-                if artist['name'].lower() == 'death':
-                    death_artist = artist
-                    break
-
-            if not death_artist:
-                logger.error("Death grubu bulunamadı!")
-                return
-
-            artist_id = death_artist['id']
-            logger.info(f"Death grubu bulundu: {artist_id}")
-
-            # Tüm albümleri al
-            albums = self.sp.artist_albums(artist_id, album_type='album', limit=50)
-
-            self.death_albums = []
-            for album in albums['items']:
-                self.death_albums.append({
-                    'uri': album['uri'],
-                    'name': album['name'],
-                    'id': album['id']
-                })
-
-            logger.info(f"{len(self.death_albums)} adet Death albümü bulundu: {[a['name'] for a in self.death_albums]}")
-
-        except Exception as e:
-            logger.error(f"Death albümleri bulunurken hata: {e}")
-
-    def get_current_playback(self):
-        """Mevcut çalma durumunu al"""
-        try:
-            return self.sp.current_playback()
-        except Exception as e:
-            logger.error(f"Playback bilgisi alınırken hata: {e}")
-            return None
-
-    def check_user_activity(self):
-        """Kullanıcı aktivitesini kontrol et"""
-        playback = self.get_current_playback()
-
-        if playback is None:
-            # Oynatma durumu yok
-            return False
-
-        current_track_id = playback.get('item', {}).get('id') if playback.get('item') else None
-        is_playing = playback.get('is_playing', False)
-
-        # Kullanıcı aktivitesi kontrolü
-        user_activity = False
-
-        # 1. Şarkı değişti mi? (kullanıcı atladı)
-        if current_track_id and current_track_id != self.last_track_id:
-            if self.last_track_id is not None:  # İlk başlangıçta aktivite sayma
-                # Otomatik mod değilse veya Death dışı bir şarkıya geçildiyse
-                if not self.autoplay_mode or not self._is_death_track(playback):
-                    user_activity = True
-                    logger.info("Kullanıcı aktivitesi: Şarkı değiştirildi")
-
-        # 2. Oynatma durumu değişti mi? (kullanıcı durdurdu/başlattı)
-        if is_playing != self.last_is_playing:
-            if not self.autoplay_mode:  # Otomatik moddaysak bu aktivite sayılmaz
-                user_activity = True
-                action = "başlattı" if is_playing else "durdurdu"
-                logger.info(f"Kullanıcı aktivitesi: Çalmayı {action}")
-
-        # Son durumu kaydet
-        self.last_track_id = current_track_id
-        self.last_is_playing = is_playing
-
-        # Kullanıcı aktivitesi varsa zamanı güncelle
-        if user_activity:
-            self.last_activity_time = datetime.now()
-            # Kullanıcı müdahale ettiğinde otomatik modu kapat
-            if self.autoplay_mode:
-                logger.info("Kullanıcı müdahale etti, otomatik mod kapatıldı")
-                self.autoplay_mode = False
-
-        return user_activity
-
-    def _is_death_track(self, playback):
-        """Çalan şarkının Death'e ait olup olmadığını kontrol et"""
-        if not playback or not playback.get('item'):
-            return False
-
-        artists = playback['item'].get('artists', [])
-        for artist in artists:
-            if artist['name'].lower() == 'death':
-                return True
-        return False
-
-    def _get_preferred_device(self):
-        """Yerel cihazı (sunucu) tercih et"""
-        try:
-            devices = self.sp.devices()
-            if not devices['devices']:
-                logger.error("❌ Aktif Spotify cihazı bulunamadı!")
-                logger.error("   Spotify uygulamasını açın ve bir şarkı çalın.")
-                return None
-
-            # Cihazları listele
-            logger.info(f"{len(devices['devices'])} aktif cihaz bulundu:")
-            for dev in devices['devices']:
-                logger.info(f"  - {dev['name']} ({dev['type']}) {'[AKTIF]' if dev['is_active'] else ''}")
-
-            # Öncelik sırası:
-            # 1. Aktif cihaz varsa onu kullan
-            for device in devices['devices']:
-                if device['is_active']:
-                    logger.info(f"✓ Aktif cihaz kullanılıyor: {device['name']}")
-                    return device['id']
-
-            # 2. Computer tipinde yerel cihaz (sunucu)
-            for device in devices['devices']:
-                if device['type'].lower() == 'computer':
-                    logger.info(f"✓ Yerel cihaz seçildi: {device['name']}")
-                    return device['id']
-
-            # 3. İlk cihazı kullan
-            device = devices['devices'][0]
-            logger.info(f"✓ Cihaz seçildi: {device['name']}")
-            return device['id']
-
-        except Exception as e:
-            logger.error(f"Cihaz seçimi hatası: {e}")
-            return None
-
-    def start_death_playback(self):
-        """Death albümlerini çalmaya başla"""
-        if not self.death_albums:
-            logger.error("Death albümü bulunamadı, çalma başlatılamıyor")
-            return False
-
-        try:
-            # Cihaz seç
-            device_id = self._get_preferred_device()
-            if not device_id:
-                return False
-
-            # İlk albümü çal
-            album_uri = self.death_albums[0]['uri']
-            logger.info(f"🎵 Death çalınıyor: {self.death_albums[0]['name']}")
-
-            # Albümü çal
-            self.sp.start_playback(device_id=device_id, context_uri=album_uri)
-
-            # Repeat modunu aç (tüm albümler için)
-            self.sp.repeat('context', device_id=device_id)
-
-            # Shuffle'ı kapat (albüm sırasıyla çalsın)
-            self.sp.shuffle(False, device_id=device_id)
-
-            self.autoplay_mode = True
-            self.last_activity_time = datetime.now()
-
-            logger.info("✓ Otomatik çalma modu başlatıldı (Death albümleri loop'ta)")
-            return True
-
-        except Exception as e:
-            logger.error(f"Death çalınırken hata: {e}")
-            return False
-
-    def run(self):
-        """Ana döngü"""
-        logger.info(f"İzleme başladı. Boşta kalma süresi: {Config.IDLE_TIME_MINUTES} dakika")
-        logger.info(f"Kontrol aralığı: {Config.CHECK_INTERVAL_SECONDS} saniye")
-
-        # İLK AÇILIŞTA HEMEN DEATH ÇALSIN
-        logger.info("\n🎵 İlk açılış - Death otomatik başlatılıyor...")
-        if self.start_death_playback():
-            logger.info("✓ Death çalmaya başladı!")
-        else:
-            logger.warning("⚠️  Death başlatılamadı, izleme moduna geçiliyor...")
-
-        while True:
-            try:
-                # Kullanıcı aktivitesini kontrol et
-                self.check_user_activity()
-
-                # Boşta kalma süresini hesapla
-                idle_time = datetime.now() - self.last_activity_time
-                idle_minutes = idle_time.total_seconds() / 60
-
-                # Otomatik mod kapalıysa ve boşta kalma süresi aşıldıysa
-                if not self.autoplay_mode and idle_minutes >= Config.IDLE_TIME_MINUTES:
-                    logger.info(f"{idle_minutes:.1f} dakika boşta, Death çalmaya başlıyorum...")
-                    self.start_death_playback()
-
-                # Otomatik moddaysa durumu logla
-                if self.autoplay_mode:
-                    playback = self.get_current_playback()
-                    if playback and playback.get('item'):
-                        track_name = playback['item']['name']
-                        artist_name = playback['item']['artists'][0]['name']
-                        logger.info(f"🎵 Otomatik mod: {artist_name} - {track_name}")
-
-                # Bekle
-                time.sleep(Config.CHECK_INTERVAL_SECONDS)
-
-            except KeyboardInterrupt:
-                logger.info("Program sonlandırılıyor...")
-                break
-            except Exception as e:
-                logger.error(f"Beklenmeyen hata: {e}")
-                time.sleep(Config.CHECK_INTERVAL_SECONDS)
-
-
 def main():
-    """Ana fonksiyon"""
-    try:
-        player = SpotifyAutoPlayer()
-        player.run()
-    except Exception as e:
-        logger.error(f"Program başlatılırken hata: {e}")
-        raise
+    """Main loop"""
+    logger.info("=" * 50)
+    logger.info("W3GH Spotify AutoPlayer starting...")
+    logger.info("=" * 50)
+
+    # Connect to Spotify
+    if not spotify_service.connect():
+        logger.error("Failed to connect to Spotify!")
+        logger.error("Run the web interface first to authenticate: https://rammfire.com/spo/")
+        return
+
+    settings = Config.load_settings()
+    logger.info(f"Target artist: {settings.get('target_artist', 'Death')}")
+    logger.info(f"Wait time after stop: {settings.get('idle_time_minutes', 5)} minutes")
+    logger.info(f"Autoplay enabled: {settings.get('autoplay_enabled', True)}")
+    logger.info(f"Locked device: {settings.get('locked_device_id', 'Not set')}")
+
+    if not settings.get('locked_device_id'):
+        logger.warning("WARNING: No device locked! Go to web interface to lock a device.")
+
+    check_interval = settings.get('check_interval_seconds', 30)
+    logger.info(f"Check interval: {check_interval} seconds")
+    logger.info("=" * 50)
+
+    while True:
+        try:
+            # Reload settings each cycle (in case changed via web)
+            Config.apply_settings()
+
+            # Main check
+            spotify_service.check_and_autoplay()
+
+            # Log current state
+            status = spotify_service.get_status()
+            if status.get('playback'):
+                pb = status['playback']
+                state = "AUTOPLAY" if spotify_service.autoplay_mode else "USER"
+                logger.info(f"[{state}] {pb['artist']} - {pb['track']} on {pb['device']}")
+            elif status.get('stopped_since_minutes'):
+                logger.info(f"[STOPPED] for {status['stopped_since_minutes']} min (trigger at {status['idle_minutes']} min)")
+            else:
+                logger.debug("No playback")
+
+            time.sleep(check_interval)
+
+        except KeyboardInterrupt:
+            logger.info("Shutting down...")
+            break
+        except Exception as e:
+            logger.error(f"Error in main loop: {e}")
+            time.sleep(check_interval)
 
 
 if __name__ == "__main__":
