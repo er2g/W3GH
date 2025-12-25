@@ -1,0 +1,388 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Spotify Yönetim{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <!-- Sidebar -->
+        <div class="col-md-3 col-lg-2 sidebar d-none d-md-block">
+            <nav class="nav flex-column">
+                <a class="nav-link active" href="{{ url_for('dashboard') }}">
+                    <i class="bi bi-speedometer2"></i>Dashboard
+                </a>
+                <a class="nav-link" href="{{ url_for('devices_page') }}">
+                    <i class="bi bi-speaker"></i>Cihazlar
+                </a>
+                <a class="nav-link" href="{{ url_for('playlists_page') }}">
+                    <i class="bi bi-music-note-list"></i>Playlistler
+                </a>
+                <a class="nav-link" href="{{ url_for('settings_page') }}">
+                    <i class="bi bi-gear"></i>Ayarlar
+                </a>
+                <a class="nav-link" href="{{ url_for('logs_page') }}">
+                    <i class="bi bi-journal-text"></i>Loglar
+                </a>
+                <hr class="my-3" style="border-color: rgba(255,255,255,0.1);">
+                <a class="nav-link text-danger" href="{{ url_for('logout') }}">
+                    <i class="bi bi-box-arrow-right"></i>Çıkış
+                </a>
+            </nav>
+        </div>
+
+        <!-- Main Content -->
+        <div class="col-md-9 col-lg-10 ms-auto p-4">
+            <!-- Kullanıcı Bilgisi -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h3>Hoş geldin, {{ user_info.display_name }}</h3>
+                    <span class="badge {% if user_info.product == 'premium' %}bg-success{% else %}bg-warning{% endif %}">
+                        {{ user_info.product | upper }}
+                    </span>
+                </div>
+                <div>
+                    <!-- Player Kontrol -->
+                    <div class="btn-group">
+                        <button class="btn {% if player_running %}btn-success{% else %}btn-outline-success{% endif %}"
+                                onclick="togglePlayer()" id="playerToggle">
+                            <i class="bi {% if player_running %}bi-stop-circle{% else %}bi-play-circle{% endif %} me-2"></i>
+                            <span id="playerStatus">{{ 'Player Durdur' if player_running else 'Player Başlat' }}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- Now Playing -->
+                <div class="col-lg-8 mb-4">
+                    <div class="now-playing" id="nowPlaying">
+                        {% if playback and playback.item %}
+                        <div class="d-flex">
+                            <img src="{{ playback.item.album.images[0].url if playback.item.album.images else '' }}"
+                                 alt="" class="album-art me-4">
+                            <div class="flex-grow-1">
+                                <h4 class="mb-1">{{ playback.item.name }}</h4>
+                                <p class="text-muted mb-3">
+                                    {{ playback.item.artists[0].name }} • {{ playback.item.album.name }}
+                                </p>
+
+                                <!-- Progress -->
+                                <div class="progress mb-3" style="height: 4px;">
+                                    {% set progress = (playback.progress_ms / playback.item.duration_ms * 100) if playback.item.duration_ms else 0 %}
+                                    <div class="progress-bar progress-bar-spotify" style="width: {{ progress }}%"></div>
+                                </div>
+
+                                <!-- Kontroller -->
+                                <div class="player-controls">
+                                    <button onclick="shuffle()" title="Shuffle" id="shuffleBtn"
+                                            class="{% if playback.shuffle_state %}text-spotify{% endif %}">
+                                        <i class="bi bi-shuffle"></i>
+                                    </button>
+                                    <button onclick="previous()" title="Önceki">
+                                        <i class="bi bi-skip-start-fill"></i>
+                                    </button>
+                                    <button class="play-btn" onclick="togglePlayback()" id="playBtn">
+                                        <i class="bi {% if playback.is_playing %}bi-pause-fill{% else %}bi-play-fill{% endif %}"></i>
+                                    </button>
+                                    <button onclick="next()" title="Sonraki">
+                                        <i class="bi bi-skip-end-fill"></i>
+                                    </button>
+                                    <button onclick="cycleRepeat()" title="Repeat" id="repeatBtn"
+                                            class="{% if playback.repeat_state != 'off' %}text-spotify{% endif %}">
+                                        <i class="bi {% if playback.repeat_state == 'track' %}bi-repeat-1{% else %}bi-repeat{% endif %}"></i>
+                                    </button>
+                                </div>
+
+                                <!-- Volume -->
+                                <div class="d-flex align-items-center mt-4">
+                                    <i class="bi bi-volume-down me-2"></i>
+                                    <input type="range" class="form-range volume-slider" id="volumeSlider"
+                                           min="0" max="100" value="{{ playback.device.volume_percent if playback.device else 50 }}"
+                                           onchange="setVolume(this.value)">
+                                    <i class="bi bi-volume-up ms-2"></i>
+                                    <span class="ms-2" id="volumeValue">{{ playback.device.volume_percent if playback.device else 50 }}%</span>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-5">
+                            <i class="bi bi-music-note-beamed text-muted" style="font-size: 64px;"></i>
+                            <p class="mt-3 text-muted">Şu an hiçbir şey çalmıyor</p>
+                            <button class="btn btn-spotify mt-2" onclick="quickPlay()">
+                                <i class="bi bi-play-fill me-2"></i>Hızlı Başlat
+                            </button>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Cihazlar -->
+                <div class="col-lg-4 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-speaker me-2"></i>Aktif Cihazlar</span>
+                            <button class="btn btn-sm btn-outline-light" onclick="refreshDevices()">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                        </div>
+                        <div class="card-body" id="devicesList">
+                            {% if devices %}
+                                {% for device in devices %}
+                                <div class="device-card {% if device.is_active %}active{% endif %}
+                                            {% if settings.locked_device_id == device.id %}locked{% endif %}"
+                                     onclick="transferPlayback('{{ device.id }}')">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <i class="bi {% if device.type == 'Computer' %}bi-laptop{% elif device.type == 'Smartphone' %}bi-phone{% else %}bi-speaker{% endif %} me-2"></i>
+                                            <strong>{{ device.name }}</strong>
+                                            {% if settings.locked_device_id == device.id %}
+                                            <span class="badge bg-warning ms-2"><i class="bi bi-lock"></i></span>
+                                            {% endif %}
+                                        </div>
+                                        <div>
+                                            {% if device.is_active %}
+                                            <span class="badge badge-spotify">Aktif</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <small class="text-muted">{{ device.type }} • {{ device.volume_percent }}%</small>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                            <div class="text-center py-4 text-muted">
+                                <i class="bi bi-speaker" style="font-size: 32px;"></i>
+                                <p class="mt-2 mb-0">Aktif cihaz yok</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="card-footer text-center">
+                            <a href="{{ url_for('devices_page') }}" class="text-spotify text-decoration-none">
+                                Cihaz Yönetimi <i class="bi bi-arrow-right"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Durum Kartları -->
+            <div class="row">
+                <div class="col-md-4 mb-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="text-muted mb-1">Player Durumu</h6>
+                                    <h4 class="mb-0" id="playerStatusCard">
+                                        {% if player_running %}
+                                        <span class="text-success"><i class="bi bi-check-circle"></i> Çalışıyor</span>
+                                        {% else %}
+                                        <span class="text-danger"><i class="bi bi-x-circle"></i> Durdu</span>
+                                        {% endif %}
+                                    </h4>
+                                </div>
+                                <i class="bi bi-activity text-spotify" style="font-size: 32px;"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-4 mb-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="text-muted mb-1">Kilitli Cihaz</h6>
+                                    <h4 class="mb-0">
+                                        {% if settings.device_lock_enabled and settings.locked_device_name %}
+                                        <span class="text-warning"><i class="bi bi-lock"></i> {{ settings.locked_device_name }}</span>
+                                        {% else %}
+                                        <span class="text-muted">Kilit Yok</span>
+                                        {% endif %}
+                                    </h4>
+                                </div>
+                                <i class="bi bi-shield-lock text-warning" style="font-size: 32px;"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-4 mb-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="text-muted mb-1">Boşta Kalma Süresi</h6>
+                                    <h4 class="mb-0">{{ settings.idle_time_minutes }} dk</h4>
+                                </div>
+                                <i class="bi bi-clock text-info" style="font-size: 32px;"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Seçili Playlist/Artist -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="bi bi-music-note-list me-2"></i>Otomatik Çalma Kaynağı
+                        </div>
+                        <div class="card-body">
+                            {% if settings.use_custom_playlist and settings.custom_playlist_name %}
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="badge bg-info me-2">Playlist</span>
+                                    <strong>{{ settings.custom_playlist_name }}</strong>
+                                </div>
+                                <button class="btn btn-sm btn-outline-danger" onclick="clearPlaylist()">
+                                    <i class="bi bi-x"></i> Temizle
+                                </button>
+                            </div>
+                            {% else %}
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="badge badge-spotify me-2">Artist</span>
+                                    <strong>{{ settings.artist_name }}</strong> albümleri
+                                </div>
+                                <a href="{{ url_for('playlists_page') }}" class="btn btn-sm btn-outline-light">
+                                    <i class="bi bi-pencil"></i> Değiştir
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let isPlaying = {{ 'true' if playback and playback.is_playing else 'false' }};
+let playerRunning = {{ 'true' if player_running else 'false' }};
+
+// Player Toggle
+async function togglePlayer() {
+    const action = playerRunning ? 'stop' : 'start';
+    const result = await apiCall(`/api/player/${action}`, 'POST');
+
+    if (result.success) {
+        playerRunning = !playerRunning;
+        updatePlayerUI();
+    } else {
+        alert(result.message || 'Hata oluştu');
+    }
+}
+
+function updatePlayerUI() {
+    const btn = document.getElementById('playerToggle');
+    const status = document.getElementById('playerStatus');
+    const card = document.getElementById('playerStatusCard');
+
+    if (playerRunning) {
+        btn.className = 'btn btn-success';
+        btn.innerHTML = '<i class="bi bi-stop-circle me-2"></i><span>Player Durdur</span>';
+        card.innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> Çalışıyor</span>';
+    } else {
+        btn.className = 'btn btn-outline-success';
+        btn.innerHTML = '<i class="bi bi-play-circle me-2"></i><span>Player Başlat</span>';
+        card.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle"></i> Durdu</span>';
+    }
+}
+
+// Playback Controls
+async function togglePlayback() {
+    const action = isPlaying ? 'pause' : 'play';
+    const result = await apiCall(`/api/playback/${action}`, 'POST');
+
+    if (result.success) {
+        isPlaying = !isPlaying;
+        const btn = document.querySelector('#playBtn i');
+        btn.className = isPlaying ? 'bi bi-pause-fill' : 'bi bi-play-fill';
+    }
+}
+
+async function next() {
+    await apiCall('/api/playback/next', 'POST');
+    setTimeout(() => location.reload(), 500);
+}
+
+async function previous() {
+    await apiCall('/api/playback/previous', 'POST');
+    setTimeout(() => location.reload(), 500);
+}
+
+async function setVolume(value) {
+    document.getElementById('volumeValue').textContent = value + '%';
+    await apiCall('/api/playback/volume', 'POST', { volume: parseInt(value) });
+}
+
+async function shuffle() {
+    const btn = document.getElementById('shuffleBtn');
+    const isActive = btn.classList.contains('text-spotify');
+    const result = await apiCall('/api/playback/shuffle', 'POST', { state: !isActive });
+
+    if (result.success) {
+        btn.classList.toggle('text-spotify');
+    }
+}
+
+async function cycleRepeat() {
+    const btn = document.getElementById('repeatBtn');
+    const icon = btn.querySelector('i');
+    let mode = 'off';
+
+    if (icon.classList.contains('bi-repeat') && !btn.classList.contains('text-spotify')) {
+        mode = 'context';
+    } else if (icon.classList.contains('bi-repeat') && btn.classList.contains('text-spotify')) {
+        mode = 'track';
+    }
+
+    const result = await apiCall('/api/playback/repeat', 'POST', { mode: mode });
+
+    if (result.success) {
+        if (mode === 'off') {
+            btn.classList.remove('text-spotify');
+            icon.className = 'bi bi-repeat';
+        } else if (mode === 'context') {
+            btn.classList.add('text-spotify');
+            icon.className = 'bi bi-repeat';
+        } else {
+            btn.classList.add('text-spotify');
+            icon.className = 'bi bi-repeat-1';
+        }
+    }
+}
+
+async function transferPlayback(deviceId) {
+    await apiCall('/api/devices/transfer', 'POST', { device_id: deviceId });
+    setTimeout(() => location.reload(), 500);
+}
+
+async function refreshDevices() {
+    location.reload();
+}
+
+async function quickPlay() {
+    await apiCall('/api/playback/play', 'POST');
+    setTimeout(() => location.reload(), 500);
+}
+
+async function clearPlaylist() {
+    const result = await apiCall('/api/playlist/clear', 'POST');
+    if (result.success) {
+        location.reload();
+    }
+}
+
+// Auto-refresh status every 30 seconds
+setInterval(async () => {
+    const status = await apiCall('/api/status');
+    playerRunning = status.player_running;
+    updatePlayerUI();
+}, 30000);
+</script>
+{% endblock %}

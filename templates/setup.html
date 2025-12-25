@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}API Kurulumu - Spotify Yönetim{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-key me-2"></i>Spotify API Kurulumu</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="alert alert-info">
+                        <h6><i class="bi bi-info-circle me-2"></i>Nasıl API bilgisi alınır?</h6>
+                        <ol class="mb-0 small">
+                            <li><a href="https://developer.spotify.com/dashboard" target="_blank" class="text-info">Spotify Developer Dashboard</a>'a gidin</li>
+                            <li>"Create App" butonuna tıklayın</li>
+                            <li>App Name ve Description girin</li>
+                            <li><strong>Redirect URI</strong> olarak şunu ekleyin:<br>
+                                <code id="redirectUri">{{ request.url_root }}callback</code>
+                                <button class="btn btn-sm btn-outline-light ms-2" onclick="copyRedirectUri()">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </li>
+                            <li>Client ID ve Client Secret'ı kopyalayın</li>
+                        </ol>
+                    </div>
+
+                    <form method="POST" action="{{ url_for('setup') }}">
+                        <div class="mb-3">
+                            <label class="form-label">Client ID</label>
+                            <input type="text" class="form-control" name="client_id"
+                                   value="{{ credentials.client_id if credentials else '' }}"
+                                   placeholder="Spotify Client ID" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Client Secret</label>
+                            <input type="password" class="form-control" name="client_secret"
+                                   value="{{ credentials.client_secret if credentials else '' }}"
+                                   placeholder="Spotify Client Secret" required>
+                            <small class="text-muted">Bu bilgi güvenli şekilde saklanır.</small>
+                        </div>
+
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="submit" class="btn btn-spotify">
+                                <i class="bi bi-save me-2"></i>Kaydet ve Devam Et
+                            </button>
+                            <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-2"></i>Geri
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function copyRedirectUri() {
+    const uri = document.getElementById('redirectUri').textContent;
+    navigator.clipboard.writeText(uri).then(() => {
+        alert('Redirect URI kopyalandı!');
+    });
+}
+</script>
+{% endblock %}

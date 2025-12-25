@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Spotify Yönetim Paneli{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="text-center mb-5">
+                <i class="bi bi-spotify text-spotify" style="font-size: 80px;"></i>
+                <h1 class="mt-3">Spotify Yönetim Paneli</h1>
+                <p class="text-muted">Tüm Spotify ayarlarınızı web üzerinden yönetin</p>
+            </div>
+
+            {% if not has_credentials %}
+            <!-- API Kurulumu Gerekli -->
+            <div class="card">
+                <div class="card-body text-center p-5">
+                    <i class="bi bi-key text-warning" style="font-size: 48px;"></i>
+                    <h4 class="mt-3">API Kurulumu Gerekli</h4>
+                    <p class="text-muted">Spotify Developer API bilgilerinizi girerek başlayın.</p>
+                    <a href="{{ url_for('setup') }}" class="btn btn-spotify mt-3">
+                        <i class="bi bi-gear me-2"></i>Kuruluma Başla
+                    </a>
+                </div>
+            </div>
+
+            {% elif not is_authenticated %}
+            <!-- Giriş Gerekli -->
+            <div class="card">
+                <div class="card-body text-center p-5">
+                    <i class="bi bi-person-circle text-spotify" style="font-size: 48px;"></i>
+                    <h4 class="mt-3">Spotify'a Giriş Yapın</h4>
+                    <p class="text-muted">Hesabınızla giriş yaparak devam edin.</p>
+                    <a href="{{ url_for('login') }}" class="btn btn-spotify mt-3">
+                        <i class="bi bi-spotify me-2"></i>Spotify ile Giriş Yap
+                    </a>
+                    <div class="mt-4">
+                        <a href="{{ url_for('setup') }}" class="text-muted small">
+                            <i class="bi bi-gear me-1"></i>API ayarlarını değiştir
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            {% else %}
+            <!-- Giriş Yapılmış -->
+            <div class="card">
+                <div class="card-body text-center p-5">
+                    {% if user_info.images %}
+                    <img src="{{ user_info.images[0].url }}" alt="" class="rounded-circle mb-3" style="width: 80px; height: 80px;">
+                    {% else %}
+                    <i class="bi bi-person-circle text-spotify" style="font-size: 64px;"></i>
+                    {% endif %}
+                    <h4>Hoş geldin, {{ user_info.display_name }}!</h4>
+                    <p class="text-muted">
+                        <span class="badge {% if user_info.product == 'premium' %}bg-success{% else %}bg-warning{% endif %}">
+                            {{ user_info.product | upper }}
+                        </span>
+                    </p>
+
+                    <div class="d-grid gap-2 mt-4">
+                        <a href="{{ url_for('dashboard') }}" class="btn btn-spotify btn-lg">
+                            <i class="bi bi-speedometer2 me-2"></i>Panele Git
+                        </a>
+                    </div>
+
+                    <div class="row mt-5 text-center">
+                        <div class="col-4">
+                            <a href="{{ url_for('devices_page') }}" class="text-decoration-none">
+                                <i class="bi bi-speaker text-spotify" style="font-size: 32px;"></i>
+                                <p class="small mt-2 text-white">Cihazlar</p>
+                            </a>
+                        </div>
+                        <div class="col-4">
+                            <a href="{{ url_for('playlists_page') }}" class="text-decoration-none">
+                                <i class="bi bi-music-note-list text-spotify" style="font-size: 32px;"></i>
+                                <p class="small mt-2 text-white">Playlistler</p>
+                            </a>
+                        </div>
+                        <div class="col-4">
+                            <a href="{{ url_for('settings_page') }}" class="text-decoration-none">
+                                <i class="bi bi-gear text-spotify" style="font-size: 32px;"></i>
+                                <p class="small mt-2 text-white">Ayarlar</p>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Player Durumu -->
+            <div class="card mt-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1">Otomatik Player</h6>
+                            <small class="text-muted">{{ 'Çalışıyor' if player_running else 'Durdu' }}</small>
+                        </div>
+                        <div>
+                            <span class="status-indicator {% if player_running %}status-online{% else %}status-offline{% endif %}"></span>
+                            {% if player_running %}
+                            <span class="text-success">Aktif</span>
+                            {% else %}
+                            <span class="text-danger">Pasif</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+
+{% block title %}Cihaz Yönetimi - Spotify Yönetim{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <!-- Sidebar -->
+        <div class="col-md-3 col-lg-2 sidebar d-none d-md-block">
+            <nav class="nav flex-column">
+                <a class="nav-link" href="{{ url_for('dashboard') }}">
+                    <i class="bi bi-speedometer2"></i>Dashboard
+                </a>
+                <a class="nav-link active" href="{{ url_for('devices_page') }}">
+                    <i class="bi bi-speaker"></i>Cihazlar
+                </a>
+                <a class="nav-link" href="{{ url_for('playlists_page') }}">
+                    <i class="bi bi-music-note-list"></i>Playlistler
+                </a>
+                <a class="nav-link" href="{{ url_for('settings_page') }}">
+                    <i class="bi bi-gear"></i>Ayarlar
+                </a>
+                <a class="nav-link" href="{{ url_for('logs_page') }}">
+                    <i class="bi bi-journal-text"></i>Loglar
+                </a>
+            </nav>
+        </div>
+
+        <!-- Main Content -->
+        <div class="col-md-9 col-lg-10 ms-auto p-4">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3><i class="bi bi-speaker me-2"></i>Cihaz Yönetimi</h3>
+                <button class="btn btn-outline-light" onclick="refreshDevices()">
+                    <i class="bi bi-arrow-clockwise me-2"></i>Yenile
+                </button>
+            </div>
+
+            <!-- Cihaz Kilidi Durumu -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-shield-lock me-2"></i>Cihaz Kilidi</span>
+                    {% if settings.device_lock_enabled %}
+                    <span class="badge bg-warning">Aktif</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Pasif</span>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    {% if settings.device_lock_enabled and settings.locked_device_name %}
+                    <div class="alert alert-warning mb-3">
+                        <i class="bi bi-lock-fill me-2"></i>
+                        <strong>{{ settings.locked_device_name }}</strong> cihazına kilitli.
+                        <br>
+                        <small class="text-muted">Bu cihaz çevrimdışı olursa, çalma otomatik olarak duraklatılır.</small>
+                    </div>
+                    <button class="btn btn-outline-danger" onclick="unlockDevice()">
+                        <i class="bi bi-unlock me-2"></i>Kilidi Kaldır
+                    </button>
+                    {% else %}
+                    <p class="text-muted mb-3">
+                        Bir cihazı kilitleyerek, müziğin sadece o cihazda çalmasını sağlayabilirsiniz.
+                        Cihaz kaybolursa sistem otomatik olarak durur.
+                    </p>
+                    <p class="mb-0 small text-muted">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Aşağıdaki listeden bir cihaz seçerek kilitleyin.
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Aktif Cihazlar -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-wifi me-2"></i>Aktif Cihazlar
+                </div>
+                <div class="card-body">
+                    {% if devices %}
+                    <div class="row" id="devicesList">
+                        {% for device in devices %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card h-100 {% if device.is_active %}border-success{% endif %}
+                                        {% if settings.locked_device_id == device.id %}border-warning{% endif %}"
+                                 style="border-width: 2px;">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center mb-3">
+                                        <div class="me-3">
+                                            {% if device.type == 'Computer' %}
+                                            <i class="bi bi-laptop text-spotify" style="font-size: 32px;"></i>
+                                            {% elif device.type == 'Smartphone' %}
+                                            <i class="bi bi-phone text-spotify" style="font-size: 32px;"></i>
+                                            {% elif device.type == 'Tablet' %}
+                                            <i class="bi bi-tablet text-spotify" style="font-size: 32px;"></i>
+                                            {% elif device.type == 'Speaker' %}
+                                            <i class="bi bi-speaker text-spotify" style="font-size: 32px;"></i>
+                                            {% elif device.type == 'TV' %}
+                                            <i class="bi bi-tv text-spotify" style="font-size: 32px;"></i>
+                                            {% else %}
+                                            <i class="bi bi-music-player text-spotify" style="font-size: 32px;"></i>
+                                            {% endif %}
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-0">{{ device.name }}</h6>
+                                            <small class="text-muted">{{ device.type }}</small>
+                                        </div>
+                                    </div>
+
+                                    <!-- Durum -->
+                                    <div class="mb-3">
+                                        {% if device.is_active %}
+                                        <span class="badge bg-success"><i class="bi bi-play-fill"></i> Çalıyor</span>
+                                        {% endif %}
+                                        {% if settings.locked_device_id == device.id %}
+                                        <span class="badge bg-warning"><i class="bi bi-lock"></i> Kilitli</span>
+                                        {% endif %}
+                                    </div>
+
+                                    <!-- Ses Seviyesi -->
+                                    <div class="mb-3">
+                                        <small class="text-muted">Ses: {{ device.volume_percent }}%</small>
+                                        <div class="progress" style="height: 4px;">
+                                            <div class="progress-bar progress-bar-spotify"
+                                                 style="width: {{ device.volume_percent }}%"></div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Butonlar -->
+                                    <div class="d-grid gap-2">
+                                        {% if not device.is_active %}
+                                        <button class="btn btn-outline-spotify btn-sm"
+                                                onclick="transferPlayback('{{ device.id }}')">
+                                            <i class="bi bi-box-arrow-in-right me-1"></i>Bu Cihazda Çal
+                                        </button>
+                                        {% endif %}
+
+                                        {% if settings.locked_device_id != device.id %}
+                                        <button class="btn btn-outline-warning btn-sm"
+                                                onclick="lockDevice('{{ device.id }}', '{{ device.name }}')">
+                                            <i class="bi bi-lock me-1"></i>Kilitle
+                                        </button>
+                                        {% else %}
+                                        <button class="btn btn-warning btn-sm"
+                                                onclick="unlockDevice()">
+                                            <i class="bi bi-unlock me-1"></i>Kilidi Kaldır
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-speaker text-muted" style="font-size: 64px;"></i>
+                        <h5 class="mt-3 text-muted">Aktif Cihaz Bulunamadı</h5>
+                        <p class="text-muted">
+                            Spotify uygulamasını bir cihazda açın ve müzik çalmaya başlayın.
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Cihaz Kilidi Açıklaması -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <i class="bi bi-info-circle me-2"></i>Cihaz Kilidi Nasıl Çalışır?
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 mb-3 mb-md-0">
+                            <div class="text-center">
+                                <i class="bi bi-lock text-warning" style="font-size: 32px;"></i>
+                                <h6 class="mt-2">Cihaz Seç</h6>
+                                <p class="small text-muted mb-0">
+                                    Müziğin çalmasını istediğiniz cihazı seçin ve kilitleyin.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3 mb-md-0">
+                            <div class="text-center">
+                                <i class="bi bi-music-note-beamed text-spotify" style="font-size: 32px;"></i>
+                                <h6 class="mt-2">Sadece O Cihaz</h6>
+                                <p class="small text-muted mb-0">
+                                    Otomatik çalma sadece kilitli cihazda gerçekleşir.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-center">
+                                <i class="bi bi-shield-check text-success" style="font-size: 32px;"></i>
+                                <h6 class="mt-2">Güvenlik</h6>
+                                <p class="small text-muted mb-0">
+                                    Cihaz kaybolursa müzik otomatik durur, kaynaklar korunur.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function refreshDevices() {
+    location.reload();
+}
+
+async function transferPlayback(deviceId) {
+    const result = await apiCall('/api/devices/transfer', 'POST', { device_id: deviceId });
+    if (result.success) {
+        setTimeout(() => location.reload(), 500);
+    } else {
+        alert('Hata: ' + (result.error || 'Bilinmeyen hata'));
+    }
+}
+
+async function lockDevice(deviceId, deviceName) {
+    if (!confirm(`"${deviceName}" cihazını kilitlemek istediğinize emin misiniz?\n\nMüzik sadece bu cihazda çalacak ve cihaz kaybolursa sistem duracak.`)) {
+        return;
+    }
+
+    const result = await apiCall('/api/devices/lock', 'POST', {
+        device_id: deviceId,
+        device_name: deviceName
+    });
+
+    if (result.success) {
+        location.reload();
+    } else {
+        alert('Hata: ' + (result.message || 'Bilinmeyen hata'));
+    }
+}
+
+async function unlockDevice() {
+    if (!confirm('Cihaz kilidini kaldırmak istediğinize emin misiniz?')) {
+        return;
+    }
+
+    const result = await apiCall('/api/devices/unlock', 'POST');
+
+    if (result.success) {
+        location.reload();
+    } else {
+        alert('Hata: ' + (result.message || 'Bilinmeyen hata'));
+    }
+}
+</script>
+{% endblock %}
