@@ -111,13 +111,15 @@ class SpotifyService:
             logger.error(f"Get devices error: {e}")
             return []
 
-    def get_current_playback(self):
+    def get_current_playback(self, raise_error=False):
         if not self.is_connected():
             return None
         try:
             return self.sp.current_playback()
         except Exception as e:
             logger.error(f"Playback error: {e}")
+            if raise_error:
+                raise e
             return None
 
     def search_artist(self, query):
@@ -228,24 +230,30 @@ class SpotifyService:
             logger.info("Playback started")
 
             # Wait a bit for Spotify to register the playback
-            time.sleep(1)
+            time.sleep(2)
 
-            # Set SHUFFLE ON
-            try:
-                self.sp.shuffle(True, device_id=locked_device_id)
-                logger.info("Shuffle: ON")
-            except Exception as e:
-                logger.error(f"Shuffle failed: {e}")
+            # Set SHUFFLE ON (with retries)
+            for _ in range(3):
+                try:
+                    self.sp.shuffle(True, device_id=locked_device_id)
+                    logger.info("Shuffle: ON")
+                    break
+                except Exception as e:
+                    logger.warning(f"Shuffle failed, retrying... {e}")
+                    time.sleep(1)
 
-            # Set REPEAT to context (album loop)
-            try:
-                self.sp.repeat('context', device_id=locked_device_id)
-                logger.info("Repeat: CONTEXT (album loop)")
-            except Exception as e:
-                logger.error(f"Repeat failed: {e}")
+            # Set REPEAT to context (album loop) (with retries)
+            for _ in range(3):
+                try:
+                    self.sp.repeat('context', device_id=locked_device_id)
+                    logger.info("Repeat: CONTEXT (album loop)")
+                    break
+                except Exception as e:
+                    logger.warning(f"Repeat failed, retrying... {e}")
+                    time.sleep(1)
 
             # Skip to next track to activate shuffle
-            time.sleep(0.5)
+            time.sleep(1)
             try:
                 self.sp.next_track(device_id=locked_device_id)
                 logger.info("Skipped to next track (shuffle activation)")
@@ -354,7 +362,11 @@ class SpotifyService:
             return
 
         idle_time_minutes = settings.get('idle_time_minutes', 5)
-        playback = self.get_current_playback()
+        try:
+            playback = self.get_current_playback(raise_error=True)
+        except Exception as e:
+            logger.error(f"Skipping check due to API error: {e}")
+            return
 
         is_playing = False
         current_device_id = None
@@ -374,7 +386,8 @@ class SpotifyService:
                     if playback.get('item'):
                         progress_ms = playback.get('progress_ms', 0)
                         duration_ms = playback['item'].get('duration_ms', 0)
-                        if duration_ms > 0 and progress_ms >= duration_ms - 2000:
+                        # Increased window to 5000ms to be more robust
+                        if duration_ms > 0 and progress_ms >= duration_ms - 5000:
                             logger.info("Song stuck at end, skipping...")
                             try:
                                 self.sp.next_track(device_id=locked_device_id)
@@ -389,6 +402,12 @@ class SpotifyService:
                     self.stop_playback_on_locked_device()
                     self.autoplay_mode = False
         else:
+            # If playback is explicitly stopped, we reset autoplay_mode
+            # so that it can restart after idle time.
+            if self.autoplay_mode:
+                logger.info("Playback stopped while in autoplay mode. Resetting mode to allow restart.")
+                self.autoplay_mode = False
+
             if self.playback_stopped_time is None:
                 self.playback_stopped_time = datetime.now()
                 logger.info("Stopped, countdown...")
