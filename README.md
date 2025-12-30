@@ -72,7 +72,7 @@ Cihaz kilitleme özelliği ile:
 ```
 W3GH/
 ├── app.py                    # Web sunucusu
-├── spotify_autoplay.py       # Standalone CLI player
+├── spotify_service.py        # Spotify servis katmanı
 ├── config.py                 # Konfigürasyon
 ├── auth_manual.py            # Manuel CLI auth
 ├── templates/                # HTML şablonları

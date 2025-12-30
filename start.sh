@@ -12,5 +12,5 @@ if [ ! -f ".spotify_credentials.json" ]; then
     exit 1
 fi
 
-# Python scriptini çalıştır
-python3 spotify_autoplay.py
+# Web uygulamasını başlat
+python3 app.py

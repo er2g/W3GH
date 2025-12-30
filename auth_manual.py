@@ -89,7 +89,7 @@ def get_spotify_token(client_id, client_secret):
         print(f"\nToken kaydedildi: .cache")
         print(f"Credentials kaydedildi: {Config.CREDENTIALS_FILE}")
         print("\nArtık uygulamayı başlatabilirsiniz:")
-        print("  python3 spotify_autoplay.py")
+        print("  python3 app.py")
         print()
 
         return True

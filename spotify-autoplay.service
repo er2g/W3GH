@@ -10,7 +10,7 @@ Environment="PATH=/usr/local/bin:/usr/bin:/bin"
 Environment="PYTHONUNBUFFERED=1"
 
 # Virtual environment'ı kullan
-ExecStart=/home/%i/W3GH/venv/bin/python /home/%i/W3GH/spotify_autoplay.py
+ExecStart=/home/%i/W3GH/venv/bin/python /home/%i/W3GH/app.py
 
 # Hata durumunda yeniden başlat
 Restart=on-failure

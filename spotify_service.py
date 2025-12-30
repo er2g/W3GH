@@ -1,11 +1,14 @@
 """Spotify Service - Core functionality for W3GH"""
 import logging
+import os
 import random
+import threading
 import time
 from datetime import datetime
 import spotipy
+from spotipy.exceptions import SpotifyException
 from spotipy.oauth2 import SpotifyOAuth
-from config import Config
+from config import Config, BASE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -25,13 +28,22 @@ class SpotifyService:
         self._initialized = True
         self.sp = None
         self.user_info = None
+        self._client_lock = threading.Lock()
+        self._state_lock = threading.Lock()
+        self._stop_timestamp_path = os.path.join(BASE_DIR, 'last_stop_timestamp.txt')
+        self._device_backoff_seconds = 0
+        self._next_device_check = 0.0
 
         self.autoplay_mode = False
-        self.playback_stopped_time = None
+        self.playback_stopped_time = self._load_playback_stopped_time()
         self.target_albums = []
         self.target_artist_id = None
 
     def connect(self):
+        with self._client_lock:
+            return self._connect_locked()
+
+    def _connect_locked(self):
         try:
             client_id = Config.get_client_id()
             client_secret = Config.get_client_secret()
@@ -59,6 +71,11 @@ class SpotifyService:
     def is_connected(self):
         return self.sp is not None and self.user_info is not None
 
+    def ensure_connected(self):
+        if self.is_connected():
+            return True
+        return self.connect()
+
     def get_status(self):
         if not self.is_connected():
             return {'connected': False}
@@ -67,8 +84,10 @@ class SpotifyService:
         settings = Config.load_settings()
 
         stopped_minutes = None
-        if self.playback_stopped_time:
-            stopped_minutes = (datetime.now() - self.playback_stopped_time).total_seconds() / 60
+        with self._state_lock:
+            stopped_time = self.playback_stopped_time
+        if stopped_time:
+            stopped_minutes = (datetime.now() - stopped_time).total_seconds() / 60
 
         return {
             'connected': True,
@@ -100,22 +119,27 @@ class SpotifyService:
         if not self.is_connected():
             return []
         try:
-            result = self.sp.devices()
+            with self._client_lock:
+                result = self.sp.devices()
             return [{
                 'id': d['id'],
                 'name': d['name'],
                 'type': d['type'],
                 'is_active': d['is_active']
             } for d in result.get('devices', [])]
+        except SpotifyException as e:
+            logger.debug(f"Get devices Spotify error: {e}")
+            return []
         except Exception as e:
-            logger.error(f"Get devices error: {e}")
+            logger.debug(f"Get devices error: {e}")
             return []
 
     def get_current_playback(self, raise_error=False):
         if not self.is_connected():
             return None
         try:
-            return self.sp.current_playback()
+            with self._client_lock:
+                return self.sp.current_playback()
         except Exception as e:
             logger.error(f"Playback error: {e}")
             if raise_error:
@@ -126,7 +150,8 @@ class SpotifyService:
         if not self.is_connected():
             return []
         try:
-            results = self.sp.search(q=f"artist:{query}", type='artist', limit=10)
+            with self._client_lock:
+                results = self.sp.search(q=f"artist:{query}", type='artist', limit=10)
             return [{
                 'id': a['id'],
                 'name': a['name'],
@@ -142,7 +167,8 @@ class SpotifyService:
             return None, []
 
         try:
-            results = self.sp.search(q=f"artist:{artist_name}", type='artist', limit=20)
+            with self._client_lock:
+                results = self.sp.search(q=f"artist:{artist_name}", type='artist', limit=20)
 
             target_artist = None
             for a in results['artists']['items']:
@@ -157,7 +183,8 @@ class SpotifyService:
             artist_id = target_artist['id']
             logger.info(f"Found artist: {target_artist['name']} (ID: {artist_id})")
 
-            albums_result = self.sp.artist_albums(artist_id, album_type='album', limit=50)
+            with self._client_lock:
+                albums_result = self.sp.artist_albums(artist_id, album_type='album', limit=50)
 
             valid_albums = []
             for album in albums_result['items']:
@@ -207,11 +234,7 @@ class SpotifyService:
             logger.error("No locked device!")
             return False
 
-        devices = self.get_devices()
-        device_available = any(d['id'] == locked_device_id for d in devices)
-
-        if not device_available:
-            logger.error("Locked device not available!")
+        if not self._locked_device_available(locked_device_id):
             return False
 
         artist = artist_name or settings.get('target_artist', 'Death')
@@ -226,7 +249,8 @@ class SpotifyService:
             logger.info(f"Selected: {random_album['name']}")
 
             # Start playback
-            self.sp.start_playback(device_id=locked_device_id, context_uri=random_album['uri'])
+            with self._client_lock:
+                self.sp.start_playback(device_id=locked_device_id, context_uri=random_album['uri'])
             logger.info("Playback started")
 
             # Wait a bit for Spotify to register the playback
@@ -235,7 +259,8 @@ class SpotifyService:
             # Set SHUFFLE ON (with retries)
             for _ in range(3):
                 try:
-                    self.sp.shuffle(True, device_id=locked_device_id)
+                    with self._client_lock:
+                        self.sp.shuffle(True, device_id=locked_device_id)
                     logger.info("Shuffle: ON")
                     break
                 except Exception as e:
@@ -245,7 +270,8 @@ class SpotifyService:
             # Set REPEAT to context (album loop) (with retries)
             for _ in range(3):
                 try:
-                    self.sp.repeat('context', device_id=locked_device_id)
+                    with self._client_lock:
+                        self.sp.repeat('context', device_id=locked_device_id)
                     logger.info("Repeat: CONTEXT (album loop)")
                     break
                 except Exception as e:
@@ -255,13 +281,14 @@ class SpotifyService:
             # Skip to next track to activate shuffle
             time.sleep(1)
             try:
-                self.sp.next_track(device_id=locked_device_id)
+                with self._client_lock:
+                    self.sp.next_track(device_id=locked_device_id)
                 logger.info("Skipped to next track (shuffle activation)")
             except Exception as e:
                 logger.error(f"Skip failed: {e}")
 
             self.autoplay_mode = True
-            self.playback_stopped_time = None
+            self._clear_playback_stopped_time()
 
             logger.info(f"NOW PLAYING: {artist} - {random_album['name']}")
             return True
@@ -277,7 +304,8 @@ class SpotifyService:
         if not self.is_connected():
             return False
         try:
-            self.sp.pause_playback()
+            with self._client_lock:
+                self.sp.pause_playback()
             self.autoplay_mode = False
             return True
         except Exception as e:
@@ -293,7 +321,8 @@ class SpotifyService:
             return False
 
         try:
-            self.sp.pause_playback(device_id=locked_device_id)
+            with self._client_lock:
+                self.sp.pause_playback(device_id=locked_device_id)
             self.autoplay_mode = False
             logger.info("Stopped on locked device")
             return True
@@ -359,6 +388,7 @@ class SpotifyService:
 
         locked_device_id = settings.get('locked_device_id')
         if not locked_device_id:
+            self._reset_device_backoff()
             return
 
         idle_time_minutes = settings.get('idle_time_minutes', 5)
@@ -377,7 +407,7 @@ class SpotifyService:
             current_device_id = device_info.get('id')
 
         if is_playing:
-            self.playback_stopped_time = None
+            self._clear_playback_stopped_time()
 
             if current_device_id == locked_device_id:
                 if self._is_target_artist_playing(playback):
@@ -390,7 +420,8 @@ class SpotifyService:
                         if duration_ms > 0 and progress_ms >= duration_ms - 5000:
                             logger.info("Song stuck at end, skipping...")
                             try:
-                                self.sp.next_track(device_id=locked_device_id)
+                                with self._client_lock:
+                                    self.sp.next_track(device_id=locked_device_id)
                             except Exception as e:
                                 logger.error(f"Skip failed: {e}")
                 else:
@@ -408,16 +439,84 @@ class SpotifyService:
                 logger.info("Playback stopped while in autoplay mode. Resetting mode to allow restart.")
                 self.autoplay_mode = False
 
-            if self.playback_stopped_time is None:
-                self.playback_stopped_time = datetime.now()
+            with self._state_lock:
+                stopped_time = self.playback_stopped_time
+            if stopped_time is None:
+                self._set_playback_stopped_time(datetime.now())
+                stopped_time = self.playback_stopped_time
                 logger.info("Stopped, countdown...")
 
-            stopped_minutes = (datetime.now() - self.playback_stopped_time).total_seconds() / 60
+            stopped_minutes = (datetime.now() - stopped_time).total_seconds() / 60
 
             if stopped_minutes >= idle_time_minutes and not self.autoplay_mode:
                 logger.info(f"Idle {stopped_minutes:.1f} min -> AUTOPLAY!")
                 if self.start_playback_on_locked_device():
-                    self.playback_stopped_time = None
+                    self._clear_playback_stopped_time()
+
+    def _load_playback_stopped_time(self):
+        if not os.path.exists(self._stop_timestamp_path):
+            return None
+        try:
+            with open(self._stop_timestamp_path, 'r') as handle:
+                raw_value = handle.read().strip()
+            if not raw_value:
+                return None
+            timestamp = float(raw_value)
+            return datetime.fromtimestamp(timestamp)
+        except Exception as e:
+            logger.warning(f"Failed to read stop timestamp: {e}")
+            return None
+
+    def _set_playback_stopped_time(self, timestamp):
+        with self._state_lock:
+            self.playback_stopped_time = timestamp
+            try:
+                with open(self._stop_timestamp_path, 'w') as handle:
+                    handle.write(str(timestamp.timestamp()))
+            except Exception as e:
+                logger.warning(f"Failed to persist stop timestamp: {e}")
+
+    def _clear_playback_stopped_time(self):
+        with self._state_lock:
+            self.playback_stopped_time = None
+            try:
+                if os.path.exists(self._stop_timestamp_path):
+                    os.remove(self._stop_timestamp_path)
+            except Exception as e:
+                logger.warning(f"Failed to clear stop timestamp: {e}")
+
+    def _locked_device_available(self, locked_device_id):
+        now = time.monotonic()
+        if now < self._next_device_check:
+            return False
+
+        devices = self.get_devices()
+        if not devices:
+            self._schedule_device_backoff()
+            return False
+
+        device_available = any(d['id'] == locked_device_id for d in devices)
+        if not device_available:
+            self._schedule_device_backoff()
+            return False
+
+        self._reset_device_backoff()
+        return True
+
+    def _schedule_device_backoff(self):
+        if self._device_backoff_seconds <= 0:
+            self._device_backoff_seconds = 5
+        else:
+            self._device_backoff_seconds = min(self._device_backoff_seconds * 2, 300)
+        self._next_device_check = time.monotonic() + self._device_backoff_seconds
+        logger.info(
+            "Locked device offline. Cihaz aranıyor... Next check in %s seconds.",
+            self._device_backoff_seconds
+        )
+
+    def _reset_device_backoff(self):
+        self._device_backoff_seconds = 0
+        self._next_device_check = 0.0
 
 
 spotify_service = SpotifyService()

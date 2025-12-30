@@ -112,7 +112,7 @@ def test_connection():
     print("=" * 50)
     print()
     print("Sistemi başlatmak için:")
-    print("  python3 spotify_autoplay.py")
+    print("  python3 app.py")
     print()
 
     return True
