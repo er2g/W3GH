@@ -56,7 +56,7 @@ success "Bağımlılıklar yüklendi"
 # Script dosyalarını executable yap
 info "Script dosyaları executable yapılıyor..."
 chmod +x auth_manual.py
-chmod +x spotify_autoplay.py
+chmod +x app.py
 chmod +x setup_virtual_audio.sh
 chmod +x start.sh
 chmod +x stop.sh
@@ -115,7 +115,7 @@ echo "  2. Spotify Client Secret"
 echo "  3. URL kopyala-yapıştır"
 echo ""
 echo "Sonra uygulamayı başlatın:"
-echo "  python3 spotify_autoplay.py"
+echo "  python3 app.py"
 echo ""
 echo "veya:"
 echo "  ./start.sh"

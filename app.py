@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """W3GH - Spotify AutoPlayer Web Interface"""
 import os
-import json
 import logging
-from flask import Flask, render_template, jsonify, request, redirect, session
+import threading
+import time
+from flask import Flask, render_template, jsonify, request, redirect
 from spotipy.oauth2 import SpotifyOAuth
-from config import Config, BASE_DIR
+from config import Config
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -14,6 +15,8 @@ app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
 spotify_service = None
+autoplay_thread = None
+autoplay_thread_lock = threading.Lock()
 
 def get_spotify_service():
     global spotify_service
@@ -21,9 +24,53 @@ def get_spotify_service():
         from spotify_service import SpotifyService
         spotify_service = SpotifyService()
     # Always ensure connected
-    if not spotify_service.is_connected():
-        spotify_service.connect()
+    spotify_service.ensure_connected()
     return spotify_service
+
+
+def autoplay_loop():
+    logger.info("Autoplay thread started.")
+    while True:
+        try:
+            svc = get_spotify_service()
+            if not svc.is_connected():
+                logger.warning("Spotify not connected. Retrying in 30 seconds...")
+                time.sleep(30)
+                continue
+
+            Config.apply_settings()
+            svc.check_and_autoplay()
+
+            status = svc.get_status()
+            if status.get('playback'):
+                pb = status['playback']
+                state = "AUTOPLAY" if svc.autoplay_mode else "USER"
+                logger.info(f"[{state}] {pb['artist']} - {pb['track']} on {pb['device']}")
+            elif status.get('stopped_since_minutes'):
+                logger.info(
+                    "[STOPPED] for %.1f min (trigger at %s min)",
+                    status['stopped_since_minutes'],
+                    status['idle_minutes']
+                )
+            else:
+                logger.debug("No playback")
+
+            settings = Config.load_settings()
+            check_interval = settings.get('check_interval_seconds', 30)
+            time.sleep(max(5, int(check_interval)))
+
+        except Exception as e:
+            logger.error(f"Error in autoplay loop: {e}")
+            time.sleep(10)
+
+
+def start_autoplay_thread():
+    global autoplay_thread
+    with autoplay_thread_lock:
+        if autoplay_thread and autoplay_thread.is_alive():
+            return
+        autoplay_thread = threading.Thread(target=autoplay_loop, daemon=True)
+        autoplay_thread.start()
 
 
 def get_auth_manager():
@@ -206,4 +253,8 @@ def api_settings():
 
 if __name__ == '__main__':
     logger.info("Starting W3GH Web Interface...")
+    start_autoplay_thread()
     app.run(host='0.0.0.0', port=5000, debug=False)
+
+
+start_autoplay_thread()

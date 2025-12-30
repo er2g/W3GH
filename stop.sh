@@ -12,9 +12,9 @@ else
 fi
 
 # Python process'i varsa durdur
-if pgrep -f "spotify_autoplay.py" > /dev/null; then
+if pgrep -f "app.py" > /dev/null; then
     echo "🔍 Çalışan Python process bulundu, durduruluyor..."
-    pkill -f "spotify_autoplay.py"
+    pkill -f "app.py"
     echo "✅ Python process durduruldu"
 else
     echo "ℹ️ Çalışan Python process bulunamadı"
